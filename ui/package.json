@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "vite build && vite build --config vite.workspace.config.ts && vite build --config vite.branch.config.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:host": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
     "@tabularis/plugin-api": "file:../vendor/tabularis-plugin-api-0.4.0.tgz"
@@ -16,7 +17,9 @@
   "devDependencies": {
     "@types/react": "^19.2.14",
     "typescript": "~5.9.3",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "vitest": "^4.1.2",
+    "jsdom": "^28.1.0"
   },
   "packageManager": "pnpm@10.30.3"
 }

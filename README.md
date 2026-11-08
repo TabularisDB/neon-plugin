@@ -20,7 +20,7 @@ on the Tabularis host. It includes its runtime dependencies; Node itself is not
 bundled. Other platforms have not been packaged or verified in this release.
 
 Download the ZIP and standalone `.tabularium` from
-[GitHub Releases](https://github.com/NewtTheWolf/tabularis-neon-plugin/releases).
+[GitHub Releases](https://github.com/TabularisDB/neon-plugin/releases).
 Use the compatible Core build, then install the driver using Tabularis's plugin
 installer. An ordinary PostgreSQL connection remains available through the
 PostgreSQL driver when provider management is not needed.
@@ -88,8 +88,9 @@ pnpm package
 
 Runtime unit tests include manifest-independent SQL behavior, account isolation,
 branch safeguards, environment validation, usage calculations and archive
-replacement/credential exclusion. Full live web/desktop integration and legacy
-Core regression tests live in the linked Tabularis Core branch. Live tests create
+replacement/credential exclusion. The host-integration tests live in this plugin repository and accept
+`TABULARIS_CORE_ROOT` for a compatible Core checkout. Core itself contains only
+generic provider APIs and neutral regression fixtures. Live tests create
 and remove disposable resources and can incur small provider charges.
 
 Packaging creates a fresh archive with runtime code, dependencies, UI bundles,
@@ -102,4 +103,18 @@ Publish `.tabularium` as a standalone release asset as well as inside the ZIP.
 Apache-2.0; see [LICENSE](LICENSE) and [NOTICE](NOTICE). Derived from Tabularis and
 its public plugin SDK. Neon names and marks belong to their respective owners.
 
-[Report a plugin issue](https://github.com/NewtTheWolf/tabularis-neon-plugin/issues).
+[Report a plugin issue](https://github.com/TabularisDB/neon-plugin/issues).
+
+## Host integration tests
+
+Runtime builds are independent of Core source. UI host-component and full web
+integration tests use a compatible Core checkout for the renderer and binary:
+
+```sh
+# Install the compatible Core checkout first; do not copy this plugin into it.
+TABULARIS_CORE_ROOT=/path/to/tabularis pnpm --dir ui test:host
+TABULARIS_CORE_ROOT=/path/to/tabularis NEON_ACCOUNT_TEST_AUTH_MODE=cli NEON_ACCOUNT_TEST_BROWSER=1 node tests/account-host-e2e.mjs
+```
+
+Live tests require your explicit Neon account/service configuration and may
+create disposable resources. Never run them against an unrelated account.

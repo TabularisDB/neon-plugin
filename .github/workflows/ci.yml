@@ -19,3 +19,15 @@ jobs:
       - run: pnpm test
       - run: pnpm --dir ui typecheck
       - run: pnpm package
+      - name: Check out the compatible Core for host-component tests
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: TabularisDB/tabularis
+          ref: 7e02ba0fa649d574fc9e74e22bb4659337e47496
+          path: .core-host
+          persist-credentials: false
+      - run: pnpm --dir .core-host install --frozen-lockfile --ignore-scripts
+      - run: pnpm --dir .core-host build:explain
+      - run: pnpm --dir .core-host build:plugin-api
+      - name: Test against the separate Core checkout
+        run: TABULARIS_CORE_ROOT="$GITHUB_WORKSPACE/.core-host" pnpm --dir ui test:host

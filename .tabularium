@@ -1,7 +1,7 @@
 {
   "id": "neon",
   "name": "Neon",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Preview Neon workspace: PostgreSQL, branches, Auth, Storage, Functions, Realtime and AI Gateway. Requires the provider-workspace Core build.",
   "default_port": 5432,
   "default_username": "",
@@ -82,7 +82,7 @@
   ],
   "interpreter": "node",
   "color": "#00e599",
-  "icon": "https://raw.githubusercontent.com/NewtTheWolf/tabularis-neon-plugin/v0.2.0/assets/icon.svg",
+  "icon": "https://raw.githubusercontent.com/TabularisDB/neon-plugin/v0.2.1/assets/icon.svg",
   "engine": "neon",
   "ui_extensions": [
     {
@@ -139,9 +139,9 @@
   ],
   "license": "Apache-2.0",
   "readme": "README.md",
-  "homepage": "https://github.com/NewtTheWolf/tabularis-neon-plugin",
+  "homepage": "https://github.com/TabularisDB/neon-plugin",
   "support": {
-    "issues_url": "https://github.com/NewtTheWolf/tabularis-neon-plugin/issues"
+    "issues_url": "https://github.com/TabularisDB/neon-plugin/issues"
   },
   "screenshots": [
     {
