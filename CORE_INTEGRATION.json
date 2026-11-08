@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/TabularisDB/tabularis",
+  "sourceCommit": "238f997af7f7a734b40ad871fa1c9c40aa679f11",
+  "sourcePath": "plugins/neon",
+  "branch": "NewtTheWolf:feat/neon-integration",
+  "requiredHostApi": "0.2.7",
+  "status": "Preview; Core pull request required; Function update activation is unresolved.",
+  "pullRequest": "https://github.com/TabularisDB/tabularis/pull/1445"
+}
