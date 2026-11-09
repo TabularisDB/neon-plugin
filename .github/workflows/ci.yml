@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: TabularisDB/tabularis
-          ref: 7e02ba0fa649d574fc9e74e22bb4659337e47496
+          ref: 56f79885ba7c22864345b4ec84f3c0cf4386be77
           path: .core-host
           persist-credentials: false
       - run: pnpm --dir .core-host install --frozen-lockfile --ignore-scripts

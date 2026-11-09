@@ -1,7 +1,7 @@
 {
   "id": "neon",
   "name": "Neon",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Preview Neon workspace: PostgreSQL, branches, Auth, Storage, Functions, Realtime and AI Gateway. Requires the provider-workspace Core build.",
   "default_port": 5432,
   "default_username": "",
@@ -82,7 +82,7 @@
   ],
   "interpreter": "node",
   "color": "#00e599",
-  "icon": "https://raw.githubusercontent.com/TabularisDB/neon-plugin/v0.2.1/assets/icon.svg",
+  "icon": "https://raw.githubusercontent.com/TabularisDB/neon-plugin/v0.2.2/assets/icon.svg",
   "engine": "neon",
   "ui_extensions": [
     {
@@ -120,7 +120,7 @@
       "api_version": "0.2.7"
     }
   ],
-  "kind": "driver",
+  "kind": "cloud",
   "paradigms": [
     "sql"
   ],

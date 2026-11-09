@@ -4,7 +4,7 @@ A native Neon workspace for the Tabularis desktop database client: PostgreSQL,
 branches, Auth, private text objects, Functions, Realtime and the AI Gateway.
 
 **This is a preview.** It requires the provider-workspace Core changes and plugin
-API **0.2.7**. Stock Tabularis 0.31.0 does not include that API. See [Core PR #1445](https://github.com/TabularisDB/tabularis/pull/1445) and
+API **0.2.7**, plus acceptance of the `cloud` package kind. Stock Tabularis 0.31.0 does not include that API. See [Core PR #1445](https://github.com/TabularisDB/tabularis/pull/1445) and
 `CORE_INTEGRATION.json` for the required source revision.
 
 **Known live failure:** Neon can report a deployment as completed/active while
@@ -12,6 +12,10 @@ GET and POST execute the previous Function code and environment. Independent
 SDK/HTTP controls reproduce it. Initial deployments work; verify the endpoint
 after every update. The plugin does not delete and recreate existing Functions
 to conceal this problem.
+
+The registry classifies this package as **Cloud**. It retains the executable
+JSON-RPC database driver contract for SQL and metadata operations. The supporting
+Core build accepts `kind: cloud`; older hosts reject that package kind.
 
 ## Installation
 
