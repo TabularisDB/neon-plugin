@@ -351,6 +351,8 @@ function Storage({connectionId}: ConnectedProps) {
     const [body, setBody] = useState('');
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [confirmPut, setConfirmPut] = useState(false);
+    const selectedObject = listing.data?.objects.find((item) => item.Key === key);
+    const readUnavailable = selectedObject?.Size !== undefined && selectedObject.Size > 1024 * 1024;
     const load = (tokens: (string | undefined)[] = [undefined], listedPrefix = prefix) =>
         listing.run(async () => ({
             ...(await call<Pick<StoragePage, 'objects' | 'nextContinuationToken'>>(
@@ -536,7 +538,8 @@ function Storage({connectionId}: ConnectedProps) {
                             </button>
                             <button
                                 className="neon-button"
-                                disabled={action.pending || !key.trim()}
+                                disabled={action.pending || !key.trim() || readUnavailable}
+                                title={readUnavailable ? t('storageReadTooLarge') : undefined}
                                 onClick={() =>
                                     void action.run(() => call('neon_storage_get', {key}))
                                 }
@@ -555,6 +558,7 @@ function Storage({connectionId}: ConnectedProps) {
                             {t('deleteObject')}
                         </button>
                     </div>
+                    {readUnavailable && <p className="neon-hint">{t('storageReadTooLarge')}</p>}
                     {(confirmDelete || confirmPut) && (
                         <div className="neon-confirmation">
                             <p>
@@ -749,9 +753,7 @@ function Realtime({connectionId}: ConnectedProps) {
     const t = usePluginTranslation('neon');
     const {call} = usePluginRpc('neon', connectionId);
     const task = useTask<Record<string, unknown>[]>();
-    const [query, setQuery] = useState(
-        'SELECT id, title, body, updated_at FROM tabularis_demo.notes ORDER BY id LIMIT 20',
-    );
+    const [query, setQuery] = useState('SELECT 1 AS value');
     const [column, setColumn] = useState('');
     const [until, setUntil] = useState('');
     const valid = /^\s*select\b/i.test(query) && (!until || !!column.trim());
@@ -785,7 +787,7 @@ function Realtime({connectionId}: ConnectedProps) {
                                 id="neon-column"
                                 value={column}
                                 onChange={(event) => setColumn(event.target.value)}
-                                placeholder="title"
+                                placeholder="value"
                             />
                         </div>
                         <div>

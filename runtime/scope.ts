@@ -12,7 +12,6 @@ const operations = new Set([
     'neon_auth_user_details',
     'neon_management_context',
     'neon_branch_context',
-    'neon_demo_notes',
     'neon_function',
     'neon_ai_models',
     'neon_ai_complete',
@@ -109,7 +108,6 @@ export async function extension(request: Params): Promise<unknown> {
             method === 'neon_auth_users_page' ||
             method === 'neon_auth_user_details' ||
             method === 'neon_management_context' ||
-            method === 'neon_demo_notes' ||
             method === 'neon_project_branches'
         )
             return admin(method, args, context);

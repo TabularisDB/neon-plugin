@@ -117,7 +117,7 @@
   "objectCount": "{{count}} objects",
   "storageEmpty": "List the bucket to browse objects. Use the prefix to narrow the results.",
   "objectEditor": "Text object",
-  "textObjectsHint": "Read an existing object or prepare text to save. Writes require confirmation.",
+  "textObjectsHint": "Read UTF-8 text objects up to 1 MiB or prepare text to save. Writes require confirmation.",
   "response": "Response",
   "aiEmpty": "The model response will appear here after you send a prompt.",
   "functionName": "Function",
@@ -469,5 +469,6 @@
   },
   "storagePage": "Page {{page}}",
   "storageNext": "Next objects",
-  "storagePrevious": "Previous objects"
+  "storagePrevious": "Previous objects",
+  "storageReadTooLarge": "Text reads are limited to 1 MiB. Choose a smaller object."
 }

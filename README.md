@@ -151,6 +151,19 @@ regression is read-only by default. `NEON_ACCOUNT_TEST_FUNCTION_WRITES=1` enable
 its own randomly named disposable Function workflow on the explicitly selected
 test branch; it never invokes, replaces or deletes other Functions.
 
+`tests/management-e2e.mjs` retains the independent live Branch/Auth regression:
+explicit-parent creation, rename, parent/child SQL isolation, exact-name deletion,
+and creation, role changes and deletion of one temporary Auth identity. It requires
+`NEON_MANAGEMENT_TEST_ALLOW_MUTATIONS=1`, an explicit test API key in
+`NEON_MANAGEMENT_TEST_API_KEY` or a named `NEON_MANAGEMENT_TEST_CLI_PROFILE`
+with `NEON_MANAGEMENT_TEST_CLI_CONFIG_DIR`, plus explicit
+`NEON_MANAGEMENT_TEST_PROJECT_ID`, `NEON_MANAGEMENT_TEST_BRANCH_ID` and
+`NEON_MANAGEMENT_TEST_EXPECT_BRANCH_NAME`. The name must start with `tabularis-`
+and match a nondefault, unprotected branch with Auth enabled, `neondb` and
+`neondb_owner`. Cleanup removes only its random test table, child branch and user.
+Function activation is covered by the separate diagnostic below and the current
+sandbox web regression above.
+
 ## Running with tabularis web
 
 The same packaged plugin runs in desktop and web. Install Node.js 22+ and the

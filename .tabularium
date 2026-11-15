@@ -151,7 +151,7 @@
     },
     {
       "url": "screenshots/functions.png",
-      "caption": "Actual Function editor with disposable test source. Redeployment activation remains a known live-test failure.",
+      "caption": "Actual Function editor with disposable test source. Runtime checks account for provider propagation delays after deployment.",
       "alt": "Monaco JavaScript Function editor and deployment controls"
     },
     {

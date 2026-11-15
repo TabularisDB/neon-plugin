@@ -117,7 +117,7 @@
   "objectCount": "{{count}} Objekte",
   "storageEmpty": "Den Bucket laden, um Objekte anzuzeigen. Mit dem Präfix lassen sich die Ergebnisse eingrenzen.",
   "objectEditor": "Textobjekt",
-  "textObjectsHint": "Ein vorhandenes Objekt lesen oder Text zum Speichern vorbereiten. Schreibvorgänge müssen bestätigt werden.",
+  "textObjectsHint": "UTF-8-Textobjekte bis 1 MiB lesen oder Text zum Speichern vorbereiten. Schreibvorgänge müssen bestätigt werden.",
   "response": "Antwort",
   "aiEmpty": "Die Modellantwort erscheint hier nach dem Absenden eines Prompts.",
   "functionName": "Funktion",
@@ -469,5 +469,6 @@
   },
   "storagePage": "Seite {{page}}",
   "storageNext": "Nächste Objekte",
-  "storagePrevious": "Vorherige Objekte"
+  "storagePrevious": "Vorherige Objekte",
+  "storageReadTooLarge": "Textinhalte können bis 1 MiB gelesen werden. Wähle ein kleineres Objekt."
 }

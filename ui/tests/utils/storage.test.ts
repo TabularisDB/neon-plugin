@@ -21,6 +21,32 @@ afterEach(cleanup);
 beforeEach(() => rpc.call.mockReset());
 
 describe('Storage pages', () => {
+    it('disables reads for listed oversized objects and enables reads for small objects', async () => {
+        rpc.call.mockResolvedValue({
+            objects: [
+                {Key: 'large.txt', Size: 1024 * 1024 + 1},
+                {Key: 'small.txt', Size: 2},
+            ],
+            nextContinuationToken: null,
+        });
+        render(createElement(NeonPanel, {connectionId: 'saved', serviceId: 'storage'}));
+        fireEvent.click(screen.getByRole('button', {name: 'listObjects'}));
+        await screen.findByText(/large\.txt/);
+        const key = screen.getByLabelText('objectKey');
+        fireEvent.change(key, {target: {value: 'large.txt'}});
+        const read = screen.getByRole('button', {name: 'readObject'}) as HTMLButtonElement;
+        expect(read.disabled).toBe(true);
+        expect(read.title).toBe('storageReadTooLarge');
+        expect(screen.getByText('storageReadTooLarge')).toBeTruthy();
+        fireEvent.click(read);
+        expect(rpc.call).toHaveBeenCalledTimes(1);
+        fireEvent.change(key, {target: {value: 'small.txt'}});
+        expect(read.disabled).toBe(false);
+        fireEvent.click(read);
+        await waitFor(() =>
+            expect(rpc.call).toHaveBeenLastCalledWith('neon_storage_get', {key: 'small.txt'}),
+        );
+    });
     it('navigates bounded pages with the original prefix and resets tokens for a new listing', async () => {
         rpc.call.mockImplementation((_method, args) =>
             Promise.resolve({

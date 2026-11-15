@@ -84,7 +84,7 @@ const lists = (id: string) =>
     states.get(id)!.call.mock.calls.filter(([method]) => method === 'account_branch_list').length;
 
 describe('branch change events', () => {
-    it('refreshes sibling views in the same project and branch, excluding self and other scopes', async () => {
+    it('refreshes every branch view in the same project, excluding self and other projects', async () => {
         const one = renderHook(() => useBranches('one'));
         const two = renderHook(() => useBranches('two'));
         renderHook(() => useBranches('foreign-project'));
@@ -99,7 +99,7 @@ describe('branch change events', () => {
         });
         await waitFor(() =>
             expect(['one', 'two', 'foreign-project', 'foreign-branch'].map(lists)).toEqual([
-                2, 2, 1, 1,
+                2, 2, 1, 2,
             ]),
         );
         expect(publish).toHaveBeenCalledWith('neon', 'branch-changed', {
@@ -117,6 +117,8 @@ describe('branch change events', () => {
         );
         await waitFor(() => expect(lists('one')).toBe(3));
         expect(lists('two')).toBe(2);
+        expect(lists('foreign-branch')).toBe(3);
+        expect(lists('foreign-project')).toBe(1);
     });
 
     it('ignores malformed events and removes the old scope after switching connections', async () => {
@@ -133,7 +135,11 @@ describe('branch change events', () => {
         view.rerender({id: 'foreign-project'});
         await waitFor(() => expect(lists('foreign-project')).toBe(1));
         await act(() =>
-            publish('neon', 'branch-changed', {projectId: 'project', branchId: 'branch'}),
+            publish('neon', 'branch-changed', {
+                projectId: 'project',
+                branchId: 'branch',
+                origin: 'external',
+            }),
         );
         expect(lists('one')).toBe(1);
         expect(lists('foreign-project')).toBe(1);

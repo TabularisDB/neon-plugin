@@ -8,6 +8,7 @@ import {
 import {createRealtime, rawSql} from '@neon/realtime/server';
 import {env} from './env.js';
 import {text, type Params} from './database.js';
+import {readStorageText} from './storage.js';
 
 async function json(response: Response): Promise<unknown> {
     if (!response.ok) throw new Error(`Neon service returned HTTP ${response.status}`);
@@ -151,11 +152,12 @@ export async function service(method: string, args: Params): Promise<unknown> {
                 }
                 if (method === 'neon_storage_get')
                     return {
-                        body: await (
+                        body: await readStorageText(
                             await s3.send(new GetObjectCommand({Bucket, Key}), {
                                 abortSignal: timeout,
-                            })
-                        ).Body?.transformToString(),
+                            }),
+                            timeout,
+                        ),
                     };
                 await s3.send(new DeleteObjectCommand({Bucket, Key}), {abortSignal: timeout});
                 return null;

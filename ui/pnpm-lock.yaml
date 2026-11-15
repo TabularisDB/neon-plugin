@@ -407,7 +407,7 @@ packages:
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
   '@tabularis/plugin-api@file:../vendor/tabularis-plugin-api-0.4.1.tgz':
-    resolution: {integrity: sha512-HN7Q0eHn6GrB4e8F4K0wk/5xX2zF0d9fNjdYVeS5o79rM5mAcmAYUPiRXNnPgfa+5lElv6psfonyI2BgefR5Ww==, tarball: file:../vendor/tabularis-plugin-api-0.4.1.tgz}
+    resolution: {integrity: sha512-nzpC/QnL3D8CHz3zXxKKiBmOCAPECDMePt/UX5jGYQqKg00pfp8dJOrr4FHBSsywgV8cxzWiGZ+OZx9jfmtb/g==, tarball: file:../vendor/tabularis-plugin-api-0.4.1.tgz}
     version: 0.4.1
     peerDependencies:
       react: ^18.0.0 || ^19.0.0

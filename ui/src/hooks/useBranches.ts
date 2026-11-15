@@ -94,7 +94,7 @@ export function useBranches(connectionId: string) {
             if (
                 scope &&
                 event.projectId === scope.projectId &&
-                event.branchId === scope.branchId &&
+                typeof event.origin === 'string' &&
                 event.origin !== instanceId
             )
                 void refresh();
