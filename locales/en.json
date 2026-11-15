@@ -315,7 +315,19 @@
     "validationPassed": "Compilation passed · {{bytes}} bytes · Node.js 24",
     "validationFailed": "Fix the errors before deploying.",
     "copyUrl": "Copy URL",
-    "urlCopied": "Function URL copied."
+    "urlCopied": "Function URL copied.",
+    "expectedMarker": "Expected non-secret response marker",
+    "verificationHint": "Choose a unique marker returned only by the code and environment revision you expect. Verification sends the selected GET or POST request and can have side effects; use a safe handler. A matching marker proves this response, not the behavior of every request.",
+    "verifyRuntime": "Send request and verify deployment",
+    "runtimeVerified": "Expected response marker matched deployment {{id}} during this check.",
+    "runtimeMismatch": "Runtime verification failed: deployment {{id}} did not return the expected response marker.",
+    "runtimeUnverified": "Deployment {{id}}: runtime not verified. Provider status alone does not confirm the running revision.",
+    "verificationReasons": {
+      "superseded": "The requested deployment is no longer the latest. Refresh and review the new deployment before verifying it.",
+      "inactive": "The requested deployment has not completed and become active. Refresh its status before trying again.",
+      "response-mismatch": "The endpoint returned different content. It may still be serving old code or environment values.",
+      "http-error": "The endpoint did not return a successful HTTP response. Redirects are not followed."
+    }
   },
   "management": {
     "missingBinding": "Save the Neon project and branch in Connection / Setup before managing services.",
@@ -454,5 +466,8 @@
       "functions_invocations": "Function invocations",
       "functions_egress_bytes": "Functions egress"
     }
-  }
+  },
+  "storagePage": "Page {{page}}",
+  "storageNext": "Next objects",
+  "storagePrevious": "Previous objects"
 }

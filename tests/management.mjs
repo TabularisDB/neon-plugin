@@ -4,6 +4,7 @@ import {unzipSync, strFromU8} from 'fflate';
 import {account} from '../dist/account.js';
 import {extension} from '../dist/scope.js';
 import {authDirectory} from '../dist/authDirectory.js';
+import {deploymentVerificationState, verificationInputError} from '../dist/functionVerification.js';
 
 const scope = {projectId: 'project-test123', branchId: 'br-test123'};
 
@@ -153,7 +154,11 @@ test('code deployment parses without executing source and uploads only index.mjs
         credentials,
         mock.fetcher,
     );
-    assert.deepEqual(deployed, {id: '6', status: 'pending'});
+    assert.deepEqual(deployed, {
+        id: '6',
+        status: 'pending',
+        runtimeVerification: 'unverified',
+    });
     assert.equal(globalThis.MANAGEMENT_SOURCE_EXECUTED, undefined);
     const upload = mock.calls[0].body;
     const archive = unzipSync(new Uint8Array(await upload.get('zip').arrayBuffer()));
@@ -167,7 +172,11 @@ test('environment-only deployment sends changes only, preserving existing keys b
     const mock = mockApi();
     await account(
         'account_function_deploy',
-        {...scope, slug: 'demo', envChanges: {NEW_SECRET: 'write-only', REMOVE_ME: null}},
+        {
+            ...scope,
+            slug: 'demo',
+            envChanges: {NEW_SECRET: 'write-only', REMOVE_ME: null},
+        },
         credentials,
         mock.fetcher,
     );
@@ -178,6 +187,240 @@ test('environment-only deployment sends changes only, preserving existing keys b
         REMOVE_ME: '',
     });
     assert(!JSON.parse(body.get('environment')).OLD_SECRET);
+});
+
+function verificationApi({body = 'revision-two', status = 200, before = {}, after = before} = {}) {
+    const calls = [];
+    let metadataReads = 0;
+    const fetcher = async (input, init) => {
+        const request = input instanceof Request ? input : new Request(input, init);
+        calls.push(request);
+        if (new URL(request.url).origin === 'https://console.neon.tech') {
+            const patch = metadataReads++ === 0 ? before : after;
+            return Response.json({
+                function: {
+                    ...current,
+                    active_deployment: current.current_deployment,
+                    ...patch,
+                },
+            });
+        }
+        assert.equal(request.headers.has('authorization'), false);
+        assert.equal(request.redirect, 'manual');
+        assert(request.signal);
+        return new Response(body, {status});
+    };
+    return {fetcher, calls};
+}
+
+const verificationArgs = {
+    ...scope,
+    slug: 'demo',
+    method: 'GET',
+    expectedDeploymentId: '5',
+    expectedMarker: 'revision-two',
+};
+
+test('verification helpers validate byte limits and require matching completed active metadata', () => {
+    assert.equal(verificationInputError('5', 'revision-two'), undefined);
+    assert(verificationInputError('5', 'é'.repeat(513)));
+    assert(verificationInputError('5', 'bad\0marker'));
+    assert.equal(
+        deploymentVerificationState(
+            {...current, active_deployment: current.current_deployment},
+            '5',
+        ),
+        undefined,
+    );
+    assert.equal(deploymentVerificationState(current, '5'), 'inactive');
+    assert.equal(deploymentVerificationState(current, '4'), 'superseded');
+    assert.equal(
+        deploymentVerificationState(
+            {
+                ...current,
+                active_deployment: {...current.current_deployment, status: 'failed'},
+            },
+            '5',
+        ),
+        'inactive',
+    );
+});
+
+test('runtime verification requires an explicit marker and checks deployment IDs before and after the request', async () => {
+    const mock = verificationApi();
+    const result = await account(
+        'account_function_verify',
+        verificationArgs,
+        credentials,
+        mock.fetcher,
+    );
+    assert.deepEqual(result, {
+        deploymentId: '5',
+        runtimeVerification: 'verified',
+    });
+    assert.equal(mock.calls.length, 3);
+    assert.equal(mock.calls[1].url, endpoint);
+    assert(!JSON.stringify(result).includes('revision-two'));
+    for (const invalid of [
+        {expectedMarker: ''},
+        {expectedMarker: ' '.repeat(3)},
+        {expectedMarker: 'x'.repeat(1025)},
+        {expectedDeploymentId: '0'},
+        {expectedDeploymentId: 5},
+        {expectedDeploymentId: '9007199254740993'},
+    ]) {
+        const rejected = verificationApi();
+        await assert.rejects(
+            account(
+                'account_function_verify',
+                {...verificationArgs, ...invalid},
+                credentials,
+                rejected.fetcher,
+            ),
+        );
+        assert.equal(rejected.calls.length, 0);
+    }
+});
+
+test('matching provider IDs never hide stale runtime code or environment', async () => {
+    for (const {body, marker} of [
+        {body: '{"revision":1,"B":"changed"}', marker: '"revision":2'},
+        {body: '{"revision":2,"B":"beta"}', marker: '"B":"changed"'},
+    ]) {
+        const mock = verificationApi({body});
+        const result = await account(
+            'account_function_verify',
+            {...verificationArgs, expectedMarker: marker},
+            credentials,
+            mock.fetcher,
+        );
+        assert.deepEqual(result, {
+            deploymentId: '5',
+            runtimeVerification: 'mismatch',
+            reason: 'response-mismatch',
+        });
+        assert(!JSON.stringify(result).includes(body));
+    }
+});
+
+test('runtime verification refuses inactive or superseded deployments without invoking them', async () => {
+    for (const {before, reason} of [
+        {
+            before: {current_deployment: {...current.current_deployment, id: 6}},
+            reason: 'superseded',
+        },
+        {before: {active_deployment: undefined}, reason: 'inactive'},
+        {
+            before: {
+                current_deployment: {
+                    ...current.current_deployment,
+                    status: 'building',
+                },
+            },
+            reason: 'inactive',
+        },
+    ]) {
+        const mock = verificationApi({before});
+        assert.deepEqual(
+            await account('account_function_verify', verificationArgs, credentials, mock.fetcher),
+            {
+                deploymentId: '5',
+                runtimeVerification: 'unverified',
+                reason,
+            },
+        );
+        assert.equal(mock.calls.length, 1);
+    }
+});
+
+test('a deployment replaced during invocation cannot be reported as runtime verified', async () => {
+    const mock = verificationApi({
+        after: {current_deployment: {...current.current_deployment, id: 6}},
+    });
+    assert.deepEqual(
+        await account('account_function_verify', verificationArgs, credentials, mock.fetcher),
+        {
+            deploymentId: '5',
+            runtimeVerification: 'unverified',
+            reason: 'superseded',
+        },
+    );
+    assert.equal(mock.calls.length, 3);
+});
+
+test('runtime verification never follows redirects or accepts error content as proof', async () => {
+    for (const status of [302, 500]) {
+        const mock = verificationApi({status});
+        assert.deepEqual(
+            await account('account_function_verify', verificationArgs, credentials, mock.fetcher),
+            {
+                deploymentId: '5',
+                runtimeVerification: 'mismatch',
+                reason: 'http-error',
+            },
+        );
+        assert.equal(mock.calls.length, 3);
+    }
+    const hostile = verificationApi({
+        before: {invocation_url: 'https://127.0.0.1/admin'},
+    });
+    await assert.rejects(
+        account('account_function_verify', verificationArgs, credentials, hostile.fetcher),
+        /trusted Neon/,
+    );
+    assert.equal(hostile.calls.length, 1);
+    const oversized = verificationApi({body: 'x'.repeat(524289)});
+    await assert.rejects(
+        account('account_function_verify', verificationArgs, credentials, oversized.fetcher),
+        /512 KiB/,
+    );
+    const failing = verificationApi();
+    const fetcher = async (input, init) => {
+        const request = input instanceof Request ? input : new Request(input, init);
+        if (new URL(request.url).origin !== 'https://console.neon.tech')
+            throw new DOMException('synthetic-private-response', 'TimeoutError');
+        return failing.fetcher(input, init);
+    };
+    await assert.rejects(
+        account('account_function_verify', verificationArgs, credentials, fetcher),
+        /Function invocation failed or timed out/,
+    );
+});
+
+test('completed code and environment deployments remain explicitly unverified without invocation', async () => {
+    for (const changes of [
+        {
+            source: 'export default {fetch(){return new Response("revision-two")}}',
+            envChanges: {REVISION: 'two'},
+        },
+        {envChanges: {REVISION: 'two'}},
+    ]) {
+        const mock = mockApi({
+            [`POST ${branch}/functions/demo/deployments`]: Response.json({
+                deployment: {
+                    ...current.current_deployment,
+                    id: 6,
+                    status: 'completed',
+                },
+            }),
+        });
+        assert.deepEqual(
+            await account(
+                'account_function_deploy',
+                {...scope, slug: 'demo', ...changes},
+                credentials,
+                mock.fetcher,
+            ),
+            {
+                id: '6',
+                status: 'completed',
+                runtimeVerification: 'unverified',
+            },
+        );
+        assert(
+            mock.calls.every((call) => new URL(call.url).origin === 'https://console.neon.tech'),
+        );
+    }
 });
 
 test('function mutation and source validation fail before sending requests', async () => {
@@ -209,7 +452,12 @@ test('function mutation and source validation fail before sending requests', asy
     await assert.rejects(
         account(
             'account_function_deploy',
-            {...scope, slug: 'demo', source: 'export default ()=>{}', createOnly: true},
+            {
+                ...scope,
+                slug: 'demo',
+                source: 'export default ()=>{}',
+                createOnly: true,
+            },
             credentials,
             existing.fetcher,
         ),
@@ -257,7 +505,11 @@ test('logs are bounded to the selected function and explain unavailable telemetr
     );
     assert.equal(logs.available, true);
     assert.deepEqual(logs.entries, [
-        {timestamp: '2026-10-31T01:00:00Z', level: 'INFO', message: 'selected function'},
+        {
+            timestamp: '2026-10-31T01:00:00Z',
+            level: 'INFO',
+            message: 'selected function',
+        },
     ]);
     assert.equal(mock.calls.at(-1).body.limit, 100);
     const unavailable = mockApi({
@@ -287,7 +539,10 @@ test('Auth mutations create users without passwords, update roles and delete thr
         ),
         {id: 'user-id'},
     );
-    assert.deepEqual(mock.calls.at(-1).body, {email: 'test@example.com', name: 'Test'});
+    assert.deepEqual(mock.calls.at(-1).body, {
+        email: 'test@example.com',
+        name: 'Test',
+    });
     await account(
         'account_auth_set_role',
         {...scope, userId: 'user-id', role: 'admin'},
@@ -373,7 +628,11 @@ test('management context reads only bound metadata and does not require SQL cred
         secrets: {},
         context: {plugin_id: 'neon', connection_id: 'second'},
     });
-    assert.deepEqual(empty, {projectId: null, branchId: null, branchName: null});
+    assert.deepEqual(empty, {
+        projectId: null,
+        branchId: null,
+        branchName: null,
+    });
 });
 
 test('Auth directory binds search/IDs and returns no session tokens', async () => {

@@ -75,7 +75,7 @@ try {
         try {
             await plugin.call('neon_storage_put', {key, body: 'Tabularis Neon E2E'});
             assert(
-                (await plugin.call('neon_storage_list', {prefix: key})).some(
+                (await plugin.call('neon_storage_list', {prefix: key})).objects.some(
                     (item) => item.Key === key,
                 ),
             );
@@ -83,7 +83,7 @@ try {
         } finally {
             await plugin.call('neon_storage_delete', {key});
         }
-        assert.equal((await plugin.call('neon_storage_list', {prefix: key})).length, 0);
+        assert.equal((await plugin.call('neon_storage_list', {prefix: key})).objects.length, 0);
     });
     await check('Auth: signed-out, signup, sign-in, session restoration, sign-out', async () => {
         assert.equal(await plugin.call('neon_auth_session'), null);

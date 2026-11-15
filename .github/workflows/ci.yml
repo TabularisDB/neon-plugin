@@ -5,6 +5,22 @@ permissions:
 jobs:
   linux:
     runs-on: ubuntu-latest
+    env:
+      SQL_PAGINATION_TEST_URL: postgresql://postgres:neon-test@127.0.0.1:5432/neon_test
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: neon-test
+          POSTGRES_DB: neon_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
@@ -19,11 +35,11 @@ jobs:
       - run: pnpm test
       - run: pnpm --dir ui typecheck
       - run: pnpm package
-      - name: Check out the compatible Core for host-component tests
+      - name: Check out the compatible sandbox Core
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: TabularisDB/tabularis
-          ref: 56f79885ba7c22864345b4ec84f3c0cf4386be77
+          ref: 888ae560e8b7ea63aff15311cf4c0fdeb4134013
           path: .core-host
           persist-credentials: false
       - run: pnpm --dir .core-host install --frozen-lockfile --ignore-scripts
@@ -31,3 +47,13 @@ jobs:
       - run: pnpm --dir .core-host build:plugin-api
       - name: Test against the separate Core checkout
         run: TABULARIS_CORE_ROOT="$GITHUB_WORKSPACE/.core-host" pnpm --dir ui test:host
+      - name: Build the real sandbox host
+        run: |
+          rustup toolchain install stable --profile minimal
+          pnpm --dir .core-host build:plugin-guest
+          pnpm --dir .core-host build
+          cargo +stable build --locked --no-default-features --manifest-path .core-host/src-tauri/Cargo.toml
+      - name: Test the real Neon bundle inside the sandbox
+        run: |
+          pnpm --dir .core-host exec playwright install --with-deps chromium
+          TABULARIS_CORE_ROOT="$GITHUB_WORKSPACE/.core-host" pnpm test:sandbox

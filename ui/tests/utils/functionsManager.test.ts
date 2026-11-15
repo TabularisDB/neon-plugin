@@ -6,7 +6,10 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {FunctionsManager} from '../../src/FunctionsManager';
 import {clearFunctionDraft} from '../../src/utils/functionDrafts';
 
-const {call, openWorkspace} = vi.hoisted(() => ({call: vi.fn(), openWorkspace: vi.fn()}));
+const {call, openWorkspace} = vi.hoisted(() => ({
+    call: vi.fn(),
+    openWorkspace: vi.fn(),
+}));
 vi.mock('../../src/hooks/useNeonManagement', () => {
     const management = {
         scope: {projectId: 'project', branchId: 'branch'},
@@ -49,6 +52,7 @@ const details = {
     name: 'Hello',
     url: 'https://function.example',
     status: 'completed',
+    deploymentId: '5',
     updatedAt: null,
     source: null,
     environmentKeys: ['EXISTING_SECRET'],
@@ -81,7 +85,11 @@ describe('Functions manager', () => {
         expect(call.mock.calls.some(([method]) => method === 'account_function_deploy')).toBe(
             false,
         );
-        fireEvent.click(screen.getByRole('button', {name: 'functionsManager.confirmDeployment'}));
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'functionsManager.confirmDeployment',
+            }),
+        );
         await waitFor(() =>
             expect(call).toHaveBeenCalledWith('account_function_deploy', {
                 slug: 'hello',
@@ -94,7 +102,9 @@ describe('Functions manager', () => {
 
     it('creates with an explicit create-only request and opens the named native tab', async () => {
         render(createElement(FunctionsManager, {connectionId: 'conn', create: true}));
-        fireEvent.change(screen.getByLabelText('functionsManager.slug'), {target: {value: 'new'}});
+        fireEvent.change(screen.getByLabelText('functionsManager.slug'), {
+            target: {value: 'new'},
+        });
         fireEvent.click(screen.getByRole('button', {name: 'functionsManager.deploy'}));
         await waitFor(() =>
             expect(call).toHaveBeenCalledWith(
@@ -142,7 +152,9 @@ describe('Functions manager', () => {
     it('returns to the functions list without losing the source draft', async () => {
         render(createElement(FunctionsManager, {connectionId: 'conn', create: true}));
         fireEvent.change(screen.getByLabelText('functionsManager.source'), {
-            target: {value: 'export default {fetch() {return new Response("draft")}}'},
+            target: {
+                value: 'export default {fetch() {return new Response("draft")}}',
+            },
         });
         fireEvent.click(screen.getByRole('button', {name: 'functionsManager.backToList'}));
         expect(openWorkspace).toHaveBeenCalledWith({
@@ -160,7 +172,9 @@ describe('Functions manager', () => {
         const input = screen.getByLabelText(
             'functionsManager.environmentChanges',
         ) as HTMLTextAreaElement;
-        fireEvent.change(input, {target: {value: '{"API_TOKEN":"new-private","OLD_TOKEN":null}'}});
+        fireEvent.change(input, {
+            target: {value: '{"API_TOKEN":"new-private","OLD_TOKEN":null}'},
+        });
         fireEvent.click(screen.getByRole('button', {name: 'functionsManager.saveEnvironment'}));
         await waitFor(() =>
             expect(call).toHaveBeenCalledWith('account_function_deploy', {
@@ -221,6 +235,82 @@ describe('Functions manager', () => {
         await act(async () =>
             fireEvent.click(screen.getByRole('button', {name: 'functionsManager.confirmDelete'})),
         );
-        expect(call).toHaveBeenCalledWith('account_function_delete', {slug: 'hello'});
+        expect(call).toHaveBeenCalledWith('account_function_delete', {
+            slug: 'hello',
+        });
+    });
+
+    it('keeps completed provider metadata unverified until an explicit marker check', async () => {
+        call.mockImplementation(async (method: string) =>
+            method === 'account_function_get'
+                ? details
+                : {deploymentId: '5', runtimeVerification: 'verified'},
+        );
+        render(createElement(FunctionsManager, {connectionId: 'conn', slug: 'hello'}));
+        await screen.findByText('functionsManager.sourceUnavailable');
+        expect(screen.queryByText('functionsManager.runtimeVerified')).toBeNull();
+        expect(call.mock.calls.some(([method]) => method === 'account_function_verify')).toBe(
+            false,
+        );
+        openDisclosure('functionsManager.invoke');
+        fireEvent.change(screen.getByLabelText('functionsManager.expectedMarker'), {
+            target: {value: 'revision-two'},
+        });
+        fireEvent.click(screen.getByRole('button', {name: 'functionsManager.verifyRuntime'}));
+        await screen.findByText('functionsManager.runtimeVerified');
+        expect(call).toHaveBeenCalledWith('account_function_verify', {
+            slug: 'hello',
+            method: 'GET',
+            expectedDeploymentId: '5',
+            expectedMarker: 'revision-two',
+        });
+        fireEvent.change(screen.getByLabelText('functionsManager.expectedMarker'), {
+            target: {value: 'different-marker'},
+        });
+        expect(screen.queryByText('functionsManager.runtimeVerified')).toBeNull();
+    });
+
+    it('shows stale activation as a failed check and binds environment verification to the accepted deployment', async () => {
+        call.mockImplementation(async (method: string) => {
+            if (method === 'account_function_get') return details;
+            if (method === 'account_function_deploy')
+                return {
+                    id: '6',
+                    status: 'completed',
+                    runtimeVerification: 'unverified',
+                };
+            return {
+                deploymentId: '6',
+                runtimeVerification: 'mismatch',
+                reason: 'response-mismatch',
+            };
+        });
+        render(createElement(FunctionsManager, {connectionId: 'conn', slug: 'hello'}));
+        await screen.findByText('functionsManager.sourceUnavailable');
+        openDisclosure('functionsManager.environment');
+        fireEvent.change(screen.getByLabelText('functionsManager.environmentChanges'), {
+            target: {value: '{"REVISION":"two"}'},
+        });
+        fireEvent.click(screen.getByRole('button', {name: 'functionsManager.saveEnvironment'}));
+        await screen.findByText('functionsManager.environmentSaved');
+        expect(call.mock.calls.some(([method]) => method === 'account_function_verify')).toBe(
+            false,
+        );
+        openDisclosure('functionsManager.invoke');
+        fireEvent.change(screen.getByLabelText('functionsManager.expectedMarker'), {
+            target: {value: 'revision-two'},
+        });
+        fireEvent.click(screen.getByRole('button', {name: 'functionsManager.verifyRuntime'}));
+        await screen.findByText('functionsManager.runtimeMismatch');
+        expect(screen.getByRole('alert').textContent).toBe(
+            'functionsManager.verificationReasons.response-mismatch',
+        );
+        expect(call).toHaveBeenCalledWith('account_function_verify', {
+            slug: 'hello',
+            method: 'GET',
+            expectedDeploymentId: '6',
+            expectedMarker: 'revision-two',
+        });
+        expect(screen.queryByText('functionsManager.runtimeVerified')).toBeNull();
     });
 });

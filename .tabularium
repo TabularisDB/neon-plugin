@@ -1,7 +1,7 @@
 {
   "id": "neon",
   "name": "Neon",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Preview Neon workspace: PostgreSQL, branches, Auth, Storage, Functions, Realtime and AI Gateway. Requires the provider-workspace Core build.",
   "default_port": 5432,
   "default_username": "",
@@ -90,34 +90,34 @@
       "module": "ui/dist/index.js",
       "driver": "neon",
       "order": 30,
-      "api_version": "0.2.7"
+      "api_version": "0.4.1"
     },
     {
       "slot": "explorer.services",
       "module": "ui/dist/index.js",
       "driver": "neon",
       "order": 30,
-      "api_version": "0.2.7"
+      "api_version": "0.4.1"
     },
     {
       "slot": "settings.plugin.actions",
       "module": "ui/dist/index.js",
       "order": 30,
-      "api_version": "0.2.7"
+      "api_version": "0.4.1"
     },
     {
       "slot": "editor.workspace.content",
       "module": "ui/dist/workspace.js",
       "driver": "neon",
       "order": 30,
-      "api_version": "0.2.7"
+      "api_version": "0.4.1"
     },
     {
       "slot": "explorer.connection.actions",
       "module": "ui/dist/branch-selector.js",
       "driver": "neon",
       "order": 30,
-      "api_version": "0.2.7"
+      "api_version": "0.4.1"
     }
   ],
   "kind": "cloud",

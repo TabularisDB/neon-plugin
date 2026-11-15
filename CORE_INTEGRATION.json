@@ -1,10 +1,10 @@
 {
   "repository": "https://github.com/TabularisDB/tabularis",
   "branch": "NewtTheWolf:feat/neon-integration",
-  "requiredHostApi": "0.2.7",
-  "status": "Independent cloud plugin; Core API 0.2.7 and cloud package support required. Function update activation remains unresolved.",
+  "requiredHostApi": "0.4.1",
+  "status": "Sandboxed cloud provider integration; scoped Core API 0.4.1 required. Explicit runtime verification detects unresolved provider Function activation failures.",
   "pullRequest": "https://github.com/TabularisDB/tabularis/pull/1445",
-  "requiredCoreCommit": "56f79885ba7c22864345b4ec84f3c0cf4386be77",
+  "requiredCoreCommit": "888ae560e8b7ea63aff15311cf4c0fdeb4134013",
   "extractedFrom": {
     "commit": "238f997af7f7a734b40ad871fa1c9c40aa679f11",
     "path": "plugins/neon"

@@ -139,7 +139,7 @@ try {
     await check('All six Neon services work through the real Core web transport', async () => {
         assert((await extension('neon_auth_users')).rows.length > 0);
         assert((await extension('neon_demo_notes')).rows.length > 0);
-        assert(Array.isArray(await extension('neon_storage_list')));
+        assert(Array.isArray((await extension('neon_storage_list')).objects));
         assert((await extension('neon_ai_models')).data.length > 0);
         assert.equal((await extension('neon_function')).status, 200);
         assert(

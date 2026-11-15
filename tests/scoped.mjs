@@ -24,7 +24,7 @@ try {
     assert.equal(status.services.filter((item) => item.configured).length, 6);
     assert(Array.isArray((await call('neon_auth_users')).rows));
     assert((await call('neon_demo_notes')).rows.length > 0);
-    assert(Array.isArray(await call('neon_storage_list')));
+    assert(Array.isArray((await call('neon_storage_list')).objects));
     assert((await call('neon_ai_models')).data.length > 0);
     assert.equal((await call('neon_function')).status, 200);
     const rows = await call('neon_realtime_snapshot', {

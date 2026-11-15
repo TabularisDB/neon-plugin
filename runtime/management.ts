@@ -1,5 +1,6 @@
 import {isNeonError, type NeonClient, type NeonFunction} from '@neon/sdk';
 import {compileFunction} from './functionCompiler.js';
+import {deploymentVerificationState, verificationInputError} from './functionVerification.js';
 import {strToU8, zipSync} from 'fflate';
 import type {Params} from './database.js';
 
@@ -11,6 +12,7 @@ export const managementMethods = new Set([
     'account_function_rename',
     'account_function_delete',
     'account_function_invoke',
+    'account_function_verify',
     'account_function_logs',
     'account_auth_create_user',
     'account_auth_set_role',
@@ -241,7 +243,11 @@ export async function manage(
                     : cached!.language,
             });
         }
-        return {id: String(deployment.id), status: deployment.status};
+        return {
+            id: String(deployment.id),
+            status: deployment.status,
+            runtimeVerification: 'unverified',
+        };
     }
     if (method === 'account_function_delete') {
         await client.functions.delete({...scope, slug});
@@ -256,6 +262,10 @@ export async function manage(
                 name: requireString(args.name, 'function display name', 200).trim(),
             }),
         );
+    if (method === 'account_function_verify') {
+        const error = verificationInputError(args.expectedDeploymentId, args.expectedMarker);
+        if (error) throw new ManagementError(error);
+    }
     const value = await client.functions.get({...scope, slug});
     if (method === 'account_function_get') {
         const cached = sources.get(key);
@@ -304,7 +314,7 @@ export async function manage(
             throw error;
         }
     }
-    if (method === 'account_function_invoke') {
+    if (method === 'account_function_invoke' || method === 'account_function_verify') {
         if (args.method !== 'GET' && args.method !== 'POST')
             throw new ManagementError('Invocation method must be GET or POST');
         if (
@@ -314,6 +324,11 @@ export async function manage(
             throw new ManagementError('Request body must be at most 64 KiB');
         if (args.method === 'GET' && args.body)
             throw new ManagementError('GET requests cannot include a body');
+        const deploymentId = args.expectedDeploymentId as string;
+        if (method === 'account_function_verify') {
+            const reason = deploymentVerificationState(value, deploymentId);
+            if (reason) return {deploymentId, runtimeVerification: 'unverified', reason};
+        }
         const url = invocationUrl(value.invocation_url, scope, slug);
         try {
             const response = await fetcher(url, {
@@ -327,7 +342,18 @@ export async function manage(
                 redirect: 'manual',
                 signal: AbortSignal.timeout(15000),
             });
-            return {status: response.status, body: await responseText(response)};
+            const body = await responseText(response);
+            if (method === 'account_function_invoke') return {status: response.status, body};
+            const latest = await client.functions.get({...scope, slug});
+            const reason = deploymentVerificationState(latest, deploymentId);
+            if (reason) return {deploymentId, runtimeVerification: 'unverified', reason};
+            const matched = response.ok && body.includes(args.expectedMarker as string);
+            // Return no response content or expected marker: either may contain private data.
+            return {
+                deploymentId,
+                runtimeVerification: matched ? 'verified' : 'mismatch',
+                ...(matched ? {} : {reason: response.ok ? 'response-mismatch' : 'http-error'}),
+            };
         } catch (error) {
             if (error instanceof ManagementError) throw error;
             throw new ManagementError('Function invocation failed or timed out');

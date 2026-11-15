@@ -101,19 +101,41 @@ export async function service(method: string, args: Params): Promise<unknown> {
             });
             const Bucket = 'assets';
             try {
-                if (method === 'neon_storage_list')
-                    return (
-                        (
-                            await s3.send(
-                                new ListObjectsV2Command({
-                                    Bucket,
-                                    Prefix:
-                                        typeof args.prefix === 'string' ? args.prefix : undefined,
-                                }),
-                                {abortSignal: timeout},
-                            )
-                        ).Contents ?? []
+                if (method === 'neon_storage_list') {
+                    if (
+                        args.prefix !== undefined &&
+                        (typeof args.prefix !== 'string' || Buffer.byteLength(args.prefix) > 1024)
+                    )
+                        throw new Error('Storage prefix must be at most 1024 bytes');
+                    if (
+                        args.continuationToken !== undefined &&
+                        (typeof args.continuationToken !== 'string' ||
+                            !args.continuationToken ||
+                            args.continuationToken.length > 8192)
+                    )
+                        throw new Error('Invalid Storage continuation token');
+                    const result = await s3.send(
+                        new ListObjectsV2Command({
+                            Bucket,
+                            Prefix: args.prefix as string | undefined,
+                            ContinuationToken: args.continuationToken as string | undefined,
+                            MaxKeys: 200,
+                        }),
+                        {abortSignal: timeout},
                     );
+                    if (
+                        result.IsTruncated &&
+                        (!result.NextContinuationToken ||
+                            result.NextContinuationToken === args.continuationToken)
+                    )
+                        throw new Error('Storage returned an invalid continuation token');
+                    return {
+                        objects: result.Contents ?? [],
+                        nextContinuationToken: result.IsTruncated
+                            ? result.NextContinuationToken
+                            : null,
+                    };
+                }
                 const Key = text(args.key, 'key');
                 if (method === 'neon_storage_put') {
                     await s3.send(

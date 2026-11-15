@@ -4,14 +4,17 @@ A native Neon workspace for the Tabularis desktop database client: PostgreSQL,
 branches, Auth, private text objects, Functions, Realtime and the AI Gateway.
 
 **This is a preview.** It requires the provider-workspace Core changes and plugin
-API **0.2.7**, plus acceptance of the `cloud` package kind. Stock Tabularis 0.31.0 does not include that API. See [Core PR #1445](https://github.com/TabularisDB/tabularis/pull/1445) and
+sandbox API **0.4.1**, plus acceptance of the `cloud` package kind. Stock releases without the provider bridge do not include that API. See [Core PR #1445](https://github.com/TabularisDB/tabularis/pull/1445) and
 `CORE_INTEGRATION.json` for the required source revision.
 
 **Known live failure:** Neon can report a deployment as completed/active while
 GET and POST execute the previous Function code and environment. Independent
 SDK/HTTP controls reproduce it. Initial deployments work; verify the endpoint
 after every update. The plugin does not delete and recreate existing Functions
-to conceal this problem.
+to conceal this problem. Deployment status remains separate from runtime verification.
+Use the explicit verification action with a nonsecret response marker from a safe
+GET/POST test endpoint; stale responses remain visibly mismatched even when Neon
+reports the new deployment as active.
 
 The registry classifies this package as **Cloud**. It retains the executable
 JSON-RPC database driver contract for SQL and metadata operations. The supporting
@@ -40,17 +43,23 @@ plugin UI. CLI login runs on the Tabularis host, also in web mode.
 ## Features and current limits
 
 - **PostgreSQL:** SQL, metadata, CRUD, EXPLAIN, views and routine inspection.
-  Table/column DDL controls are disabled. Pagination materializes results.
+  Table/column DDL controls are disabled. Single-query pagination uses a server
+  cursor; batches retain their transaction semantics with bounded streaming.
+  Results retain at most 10,000 rows and 8 MiB; oversized explicit pages fail
+  clearly so exports cannot silently skip rows. Batch streaming can still transfer
+  the full result from the database.
 - **Branches:** list, create from an explicit parent, rename, open/reuse separate
   connections, and confirm deletion with protection for local bindings.
 - **Auth:** search/paginate, inspect users, create identities, change user/admin
   roles and confirm deletion. Password reset, invitations and session revocation
   are not implemented.
 - **Storage:** list/read/write/delete text objects in the private `assets` bucket.
-  Writes require confirmation; arbitrary bucket selection is not implemented.
+  Object lists use continuation tokens and bounded next/previous pages. Writes
+  require confirmation; arbitrary bucket selection is not implemented.
 - **Functions:** Monaco JS/TS syntax and type diagnostics, compile validation,
   initial deployment, rename, environment patches, GET/POST invocation, available
-  logs and deletion. Deployment acceptance is not runtime verification.
+  logs and deletion. Explicit runtime checks compare a nonsecret response marker
+  with the selected deployment and never equate deployment acceptance with activation.
   Original remote source cannot be downloaded. External packages need CLI bundling.
 - **Realtime:** a bounded live SQL snapshot and waiting for a matching value;
   the UI is not a general streaming-subscription manager.
@@ -90,6 +99,16 @@ pnpm --dir ui typecheck
 pnpm package
 ```
 
+The offline sandbox smoke uses the real packaged UI, a built Core server and an
+isolated empty home directory. It never links an account or accesses Neon:
+
+```sh
+TABULARIS_CORE_ROOT=/path/to/built/tabularis pnpm test:sandbox
+```
+
+Install the Core checkout's Playwright Chromium first. Set `CHROME_PATH` only when
+using a separately installed Chromium. Test evidence is written under `artifacts/`.
+
 Runtime unit tests include manifest-independent SQL behavior, account isolation,
 branch safeguards, environment validation, usage calculations and archive
 replacement/credential exclusion. The host-integration tests live in this plugin repository and accept
@@ -122,3 +141,14 @@ TABULARIS_CORE_ROOT=/path/to/tabularis NEON_ACCOUNT_TEST_AUTH_MODE=cli NEON_ACCO
 
 Live tests require your explicit Neon account/service configuration and may
 create disposable resources. Never run them against an unrelated account.
+
+## Disposable Function activation diagnostic
+
+`tests/activation-diagnostic.mjs` requires an explicit disposable project and branch,
+plus `NEON_MANAGEMENT_TEST_ALLOW_MUTATIONS=1`, `NEON_MANAGEMENT_TEST_API_KEY`,
+`NEON_MANAGEMENT_TEST_PROJECT_ID` and `NEON_MANAGEMENT_TEST_BRANCH_ID`. It creates
+one temporary Function, tests initial code/environment, a combined update and an
+environment-only update through GET and POST, and deletes the temporary Function
+in cleanup. It does not read local CLI profiles or saved credentials. Do not use
+production secrets as expected response markers. Run only against your chosen
+disposable scope; the diagnostic can incur provider charges.
