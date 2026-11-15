@@ -308,7 +308,7 @@
     "deleteWarning": "Delete {{slug}} and its deployed endpoint from this branch? This cannot be undone.",
     "deleted": "Function {{slug}} deleted.",
     "backToList": "Back to functions",
-    "activationWarning": "After updating, invoke the function to verify the result. In this environment, Neon has sometimes continued serving the previous revision.",
+    "activationWarning": "After updating, invoke a safe test endpoint and verify its response marker. Live tests observed roughly two minutes of propagation while Neon already reported the new deployment active.",
     "language": "Language",
     "problems": "Problems",
     "validate": "Validate function",
@@ -320,7 +320,7 @@
     "verificationHint": "Choose a unique marker returned only by the code and environment revision you expect. Verification sends the selected GET or POST request and can have side effects; use a safe handler. A matching marker proves this response, not the behavior of every request.",
     "verifyRuntime": "Send request and verify deployment",
     "runtimeVerified": "Expected response marker matched deployment {{id}} during this check.",
-    "runtimeMismatch": "Runtime verification failed: deployment {{id}} did not return the expected response marker.",
+    "runtimeMismatch": "Runtime verification failed: deployment {{id}} did not return the expected response marker. The update may still be propagating; wait and retry with a safe handler.",
     "runtimeUnverified": "Deployment {{id}}: runtime not verified. Provider status alone does not confirm the running revision.",
     "verificationReasons": {
       "superseded": "The requested deployment is no longer the latest. Refresh and review the new deployment before verifying it.",

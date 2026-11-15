@@ -55,7 +55,13 @@ const initial: State = {
 
 /** Each new selection invalidates all older requests, including requests still in flight. */
 export function useAccountBrowser(onConnected?: () => void | Promise<void>) {
-    const account = usePluginAccount('neon');
+    const {
+        secretFields,
+        call,
+        connect: connectAccount,
+        disconnect: disconnectAccount,
+        importConnection: importAccountConnection,
+    } = usePluginAccount('neon');
     const [state, patch] = useReducer(
         (current: State, update: Partial<State>) => ({...current, ...update}),
         initial,
@@ -85,15 +91,15 @@ export function useAccountBrowser(onConnected?: () => void | Promise<void>) {
     const reload = useCallback(
         () =>
             run(async (current) => {
-                const fields = await account.secretFields();
+                const fields = await secretFields();
                 if (!fields.includes('NEON_API_KEY') && !fields.includes('NEON_CLI_AUTH'))
                     return {...initial, connected: false};
                 const authMode = fields.includes('NEON_CLI_AUTH') ? 'cli' : 'api-key';
                 if (current()) patch({connected: true, authMode});
-                const list = await account.call<ProjectList>('account_projects');
+                const list = await call<ProjectList>('account_projects');
                 return {...initial, connected: true, authMode, ...list};
             }, 'projects'),
-        [account, run],
+        [call, secretFields, run],
     );
     useEffect(() => {
         mounted.current = true;
@@ -106,34 +112,34 @@ export function useAccountBrowser(onConnected?: () => void | Promise<void>) {
     const connect = useCallback(
         (key: string, clearDraft: () => void) =>
             run(async (current) => {
-                await account.connect({NEON_API_KEY: key.trim()});
+                await connectAccount({NEON_API_KEY: key.trim()});
                 // The key is already stored even if subsequent API discovery is forbidden.
                 if (current()) {
                     clearDraft();
                     patch({connected: true, authMode: 'api-key'});
                 }
-                const list = await account.call<ProjectList>('account_projects');
+                const list = await call<ProjectList>('account_projects');
                 return {...initial, connected: true, authMode: 'api-key', ...list};
             }, 'projects'),
-        [account, run],
+        [call, connectAccount, run],
     );
     const connectCli = useCallback(
         (profile: string) =>
             run(async (current) => {
-                await account.connect({NEON_CLI_AUTH: profile});
+                await connectAccount({NEON_CLI_AUTH: profile});
                 if (current()) patch({connected: true, authMode: 'cli'});
-                const list = await account.call<ProjectList>('account_projects');
+                const list = await call<ProjectList>('account_projects');
                 return {...initial, connected: true, authMode: 'cli', ...list};
             }, 'projects'),
-        [account, run],
+        [call, connectAccount, run],
     );
     const disconnect = useCallback(
         () =>
             run(async () => {
-                await account.disconnect();
+                await disconnectAccount();
                 return {...initial, connected: false};
             }),
-        [account, run],
+        [disconnectAccount, run],
     );
     const selectOrganization = useCallback(
         (orgId: string) => {
@@ -149,13 +155,13 @@ export function useAccountBrowser(onConnected?: () => void | Promise<void>) {
             });
             return run(
                 async () => ({
-                    ...(await account.call<ProjectList>('account_projects', orgId ? {orgId} : {})),
+                    ...(await call<ProjectList>('account_projects', orgId ? {orgId} : {})),
                     orgId,
                 }),
                 'projects',
             );
         },
-        [account, run],
+        [call, run],
     );
     const selectProject = useCallback(
         (projectId: string) => {
@@ -170,12 +176,12 @@ export function useAccountBrowser(onConnected?: () => void | Promise<void>) {
             return run(
                 async () =>
                     projectId
-                        ? await account.call<{branches: Named[]}>('account_branches', {projectId})
+                        ? await call<{branches: Named[]}>('account_branches', {projectId})
                         : {branches: []},
                 'branches',
             );
         },
-        [account, run],
+        [call, run],
     );
     const selectBranch = useCallback(
         (branchId: string) => {
@@ -183,7 +189,7 @@ export function useAccountBrowser(onConnected?: () => void | Promise<void>) {
             const projectId = state.projectId;
             return run(async () => {
                 if (!branchId) return {};
-                const resources = await account.call<AccountResources>('account_resources', {
+                const resources = await call<AccountResources>('account_resources', {
                     projectId,
                     branchId,
                 });
@@ -194,13 +200,13 @@ export function useAccountBrowser(onConnected?: () => void | Promise<void>) {
                 };
             }, 'resources');
         },
-        [account, run, state.projectId],
+        [call, run, state.projectId],
     );
     const importConnection = useCallback(
         (createServiceCredentials: boolean) => {
             const {projectId, branchId, database, role} = state;
             return run(async (current) => {
-                const imported = await account.importConnection({
+                const imported = await importAccountConnection({
                     projectId,
                     branchId,
                     database,
@@ -215,7 +221,7 @@ export function useAccountBrowser(onConnected?: () => void | Promise<void>) {
                 return {imported};
             });
         },
-        [account, onConnected, run, state],
+        [importAccountConnection, onConnected, run, state],
     );
     return {
         state,

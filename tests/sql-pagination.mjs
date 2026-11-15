@@ -2,6 +2,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import pg from 'pg';
 import {executeSql, MAX_QUERY_ROWS, MAX_RESULT_BYTES} from '../dist/sqlPagination.js';
+import {database} from '../dist/database.js';
 
 const columns = [{name: 'n', dataTypeID: 23}];
 const integerRows = (count) => Array.from({length: count}, (_, i) => [i + 1]);
@@ -73,6 +74,46 @@ class FakeClient {
         return input;
     }
 }
+
+test('database dispatch waits for cursor and batch results before closing its client', async () => {
+    const OriginalClient = pg.Client;
+    try {
+        for (const cursor of [true, false]) {
+            let connection;
+            pg.Client = class extends FakeClient {
+                constructor(config) {
+                    super({cursor});
+                    assert.equal(config.ssl.rejectUnauthorized, true);
+                    this.ended = false;
+                    connection = this;
+                }
+                async connect() {}
+                query(input) {
+                    if (this.ended) return Promise.reject(new Error('Connection terminated'));
+                    return super.query(input);
+                }
+                async end() {
+                    this.ended = true;
+                    this.calls.push({text: 'END'});
+                }
+            };
+            const result = await database('execute_query', {
+                params: {host: 'db.invalid', username: 'test', password: 'test', database: 'test'},
+                query: 'SELECT n FROM t',
+                limit: 2,
+                page: 2,
+            });
+            assert.deepEqual(result.rows, [[3], [4]]);
+            assert.equal(connection.ended, true);
+            assert.equal(connection.calls.at(-1).text, 'END');
+            assert(
+                connection.calls.some(({text}) => text === (cursor ? 'COMMIT' : 'SELECT n FROM t')),
+            );
+        }
+    } finally {
+        pg.Client = OriginalClient;
+    }
+});
 
 test('cursor pages skip on the server and transfer only one page plus a probe', async () => {
     const client = new FakeClient();

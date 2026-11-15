@@ -7,14 +7,13 @@ branches, Auth, private text objects, Functions, Realtime and the AI Gateway.
 sandbox API **0.4.1**, plus acceptance of the `cloud` package kind. Stock releases without the provider bridge do not include that API. See [Core PR #1445](https://github.com/TabularisDB/tabularis/pull/1445) and
 `CORE_INTEGRATION.json` for the required source revision.
 
-**Known live failure:** Neon can report a deployment as completed/active while
-GET and POST execute the previous Function code and environment. Independent
-SDK/HTTP controls reproduce it. Initial deployments work; verify the endpoint
-after every update. The plugin does not delete and recreate existing Functions
-to conceal this problem. Deployment status remains separate from runtime verification.
-Use the explicit verification action with a nonsecret response marker from a safe
-GET/POST test endpoint; stale responses remain visibly mismatched even when Neon
-reports the new deployment as active.
+**Observed activation delay:** Live SDK and independent HTTP tests confirmed that
+Neon can report a new deployment as completed/active while requests still execute
+the previous code and environment. In the tested scope, the new revision became
+active after roughly two minutes. Deployment acceptance remains separate from
+runtime verification: use an explicit safe test endpoint and a unique nonsecret
+response marker, then retry after propagation if necessary. The plugin does not
+delete and recreate existing Functions to conceal this delay.
 
 The registry classifies this package as **Cloud**. It retains the executable
 JSON-RPC database driver contract for SQL and metadata operations. The supporting
@@ -136,19 +135,51 @@ integration tests use a compatible Core checkout for the renderer and binary:
 ```sh
 # Install the compatible Core checkout first; do not copy this plugin into it.
 TABULARIS_CORE_ROOT=/path/to/tabularis pnpm --dir ui test:host
-TABULARIS_CORE_ROOT=/path/to/tabularis NEON_ACCOUNT_TEST_AUTH_MODE=cli NEON_ACCOUNT_TEST_BROWSER=1 node tests/account-host-e2e.mjs
+TABULARIS_CORE_ROOT=/path/to/tabularis \
+NEON_ACCOUNT_TEST_AUTH_MODE=cli \
+NEON_ACCOUNT_TEST_PROJECT_ID=your-test-project \
+NEON_ACCOUNT_TEST_BRANCH_ID=br-your-disposable-branch \
+NEON_ACCOUNT_TEST_EXPECT_BRANCH_NAME=tabularis-pr1445-live-your-suffix \
+NEON_ACCOUNT_TEST_CLI_PROFILE=DEFAULT \
+NEON_ACCOUNT_TEST_CLI_CONFIG_DIR=/path/to/neon-config \
+node tests/account-host-e2e.mjs
 ```
 
 Live tests require your explicit Neon account/service configuration and may
-create disposable resources. Never run them against an unrelated account.
+create disposable resources. Never run them against an unrelated account. The web
+regression is read-only by default. `NEON_ACCOUNT_TEST_FUNCTION_WRITES=1` enables
+its own randomly named disposable Function workflow on the explicitly selected
+test branch; it never invokes, replaces or deletes other Functions.
+
+## Running with tabularis web
+
+The same packaged plugin runs in desktop and web. Install Node.js 22+ and the
+plugin on the server. CLI sign-in belongs to that server; select its profile
+explicitly, with `NEON_CONFIG_DIR` pointing to the server-side CLI configuration
+when needed. The browser never receives the stored account token or SQL password.
+
+Password-authenticated deployments require `--allow-high-risk` for provider
+account and management operations, which deliberately retain administrator-only
+authorization. On headless hosts configure `TABULARIS_SECRET_STORE=file`, a
+persistent `TABULARIS_SECRET_STORE_PATH` and a stable `TABULARIS_SECRET_KEY`. Keep
+the encryption key securely across restarts; do not generate a new one on every
+launch. The local bootstrap mode already grants the launching owner admin access.
+
+The live web regression uses its own password, encrypted secret store, isolated
+application directories and explicitly selected disposable Neon branch. It does
+not use production defaults or force clicks through clipped UI.
 
 ## Disposable Function activation diagnostic
 
 `tests/activation-diagnostic.mjs` requires an explicit disposable project and branch,
-plus `NEON_MANAGEMENT_TEST_ALLOW_MUTATIONS=1`, `NEON_MANAGEMENT_TEST_API_KEY`,
+plus `NEON_MANAGEMENT_TEST_ALLOW_MUTATIONS=1`, either `NEON_MANAGEMENT_TEST_API_KEY`
+or an explicitly selected `NEON_MANAGEMENT_TEST_CLI_PROFILE`,
 `NEON_MANAGEMENT_TEST_PROJECT_ID` and `NEON_MANAGEMENT_TEST_BRANCH_ID`. It creates
 one temporary Function, tests initial code/environment, a combined update and an
 environment-only update through GET and POST, and deletes the temporary Function
-in cleanup. It does not read local CLI profiles or saved credentials. Do not use
+in cleanup. It never implicitly selects a saved profile or credentials. A named CLI profile
+is reused only when explicitly requested. Each phase waits up to 180 seconds for
+the expected runtime response; `NEON_MANAGEMENT_TEST_PROPAGATION_MS` can configure
+a bounded window up to 300 seconds. Do not use
 production secrets as expected response markers. Run only against your chosen
 disposable scope; the diagnostic can incur provider charges.

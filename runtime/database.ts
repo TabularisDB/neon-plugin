@@ -198,7 +198,7 @@ export async function database(method: string, args: Params): Promise<unknown> {
                 ).rows;
             case 'execute_query': {
                 await client.query(`SET search_path TO ${identifier(schema)}`);
-                return executeSql(client, text(args.query, 'query'), args.limit, args.page);
+                return await executeSql(client, text(args.query, 'query'), args.limit, args.page);
             }
             default:
                 throw new Error(`Unsupported database method: ${method}`);

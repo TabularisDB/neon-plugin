@@ -308,7 +308,7 @@
     "deleteWarning": "{{slug}} und den bereitgestellten Endpunkt aus diesem Branch löschen? Das kann nicht rückgängig gemacht werden.",
     "deleted": "Function {{slug}} gelöscht.",
     "backToList": "Zurück zu Functions",
-    "activationWarning": "Rufe die Function nach einem Update auf, um das Ergebnis zu prüfen. In dieser Umgebung hat Neon teilweise weiterhin die vorherige Revision ausgeliefert.",
+    "activationWarning": "Nach einem Update einen sicheren Test-Endpunkt aufrufen und dessen Antwortmarkierung prüfen. Im Live-Test dauerte die Aktivierung etwa zwei Minuten, obwohl Neon das neue Deployment bereits als aktiv meldete.",
     "language": "Sprache",
     "problems": "Probleme",
     "validate": "Function prüfen",
@@ -320,7 +320,7 @@
     "verificationHint": "Wähle eine eindeutige Markierung, die nur die erwartete Code- und Umgebungsversion zurückgibt. Die Prüfung sendet die gewählte GET- oder POST-Anfrage und kann Änderungen auslösen; verwende einen sicheren Handler. Eine passende Markierung belegt diese Antwort, nicht das Verhalten jeder Anfrage.",
     "verifyRuntime": "Anfrage senden und Deployment prüfen",
     "runtimeVerified": "Die erwartete Antwortmarkierung passte bei dieser Prüfung zu Deployment {{id}}.",
-    "runtimeMismatch": "Laufzeitprüfung fehlgeschlagen: Deployment {{id}} lieferte die erwartete Antwortmarkierung nicht.",
+    "runtimeMismatch": "Laufzeitprüfung fehlgeschlagen: Deployment {{id}} lieferte die erwartete Antwortmarkierung nicht. Das Update wird möglicherweise noch verteilt; warten und mit einem sicheren Handler erneut prüfen.",
     "runtimeUnverified": "Deployment {{id}}: Laufzeit ungeprüft. Der Anbieterstatus allein bestätigt die laufende Version nicht.",
     "verificationReasons": {
       "superseded": "Das gewählte Deployment ist nicht mehr das neueste. Aktualisiere und prüfe das neue Deployment vor einer erneuten Laufzeitprüfung.",
