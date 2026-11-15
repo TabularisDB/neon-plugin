@@ -39,7 +39,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: TabularisDB/tabularis
-          ref: 888ae560e8b7ea63aff15311cf4c0fdeb4134013
+          ref: f602707544dfef07db1ad9411fa8bf93a0af8f06
           path: .core-host
           persist-credentials: false
       - run: pnpm --dir .core-host install --frozen-lockfile --ignore-scripts
@@ -49,6 +49,8 @@ jobs:
         run: TABULARIS_CORE_ROOT="$GITHUB_WORKSPACE/.core-host" pnpm --dir ui test:host
       - name: Build the real sandbox host
         run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libdbus-1-dev
           rustup toolchain install stable --profile minimal
           pnpm --dir .core-host build:plugin-guest
           pnpm --dir .core-host build

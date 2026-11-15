@@ -4,7 +4,7 @@
   "requiredHostApi": "0.4.1",
   "status": "Sandboxed cloud provider integration; scoped Core API 0.4.1 required. Explicit runtime verification detects unresolved provider Function activation failures.",
   "pullRequest": "https://github.com/TabularisDB/tabularis/pull/1445",
-  "requiredCoreCommit": "888ae560e8b7ea63aff15311cf4c0fdeb4134013",
+  "requiredCoreCommit": "f602707544dfef07db1ad9411fa8bf93a0af8f06",
   "extractedFrom": {
     "commit": "238f997af7f7a734b40ad871fa1c9c40aa679f11",
     "path": "plugins/neon"
