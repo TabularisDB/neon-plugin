@@ -2,6 +2,7 @@ import pg from 'pg';
 import {parsePostgresJson} from '@tabularis/explain';
 import {env} from './env.js';
 import {buildMutation} from './mutations.js';
+import {executeSql} from './sqlPagination.js';
 
 export type Params = Record<string, unknown>;
 export function text(value: unknown, label: string): string {
@@ -197,40 +198,7 @@ export async function database(method: string, args: Params): Promise<unknown> {
                 ).rows;
             case 'execute_query': {
                 await client.query(`SET search_path TO ${identifier(schema)}`);
-                const result = await client.query({
-                    text: text(args.query, 'query'),
-                    rowMode: 'array',
-                });
-                const results = Array.isArray(result) ? result : [result];
-                const limit =
-                    typeof args.limit === 'number' &&
-                    Number.isSafeInteger(args.limit) &&
-                    args.limit > 0
-                        ? args.limit
-                        : null;
-                const page =
-                    typeof args.page === 'number' &&
-                    Number.isSafeInteger(args.page) &&
-                    args.page > 0
-                        ? args.page
-                        : 1;
-                // shortcut: pagination materializes the result; switch to cursors for large exports.
-                const format = (item: pg.QueryArrayResult) => ({
-                    columns: item.fields.map((field) => field.name),
-                    rows: limit ? item.rows.slice((page - 1) * limit, page * limit) : item.rows,
-                    affected_rows: item.rowCount ?? 0,
-                    truncated: false,
-                    pagination: limit
-                        ? {
-                              page,
-                              page_size: limit,
-                              total_rows: item.rows.length,
-                              has_more: page * limit < item.rows.length,
-                          }
-                        : null,
-                });
-                const first = format(results[0]);
-                return {...first, additional_results: results.slice(1).map(format)};
+                return await executeSql(client, text(args.query, 'query'), args.limit, args.page);
             }
             default:
                 throw new Error(`Unsupported database method: ${method}`);

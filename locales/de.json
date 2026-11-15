@@ -117,7 +117,7 @@
   "objectCount": "{{count}} Objekte",
   "storageEmpty": "Den Bucket laden, um Objekte anzuzeigen. Mit dem Präfix lassen sich die Ergebnisse eingrenzen.",
   "objectEditor": "Textobjekt",
-  "textObjectsHint": "Ein vorhandenes Objekt lesen oder Text zum Speichern vorbereiten. Schreibvorgänge müssen bestätigt werden.",
+  "textObjectsHint": "UTF-8-Textobjekte bis 1 MiB lesen oder Text zum Speichern vorbereiten. Schreibvorgänge müssen bestätigt werden.",
   "response": "Antwort",
   "aiEmpty": "Die Modellantwort erscheint hier nach dem Absenden eines Prompts.",
   "functionName": "Funktion",
@@ -308,14 +308,26 @@
     "deleteWarning": "{{slug}} und den bereitgestellten Endpunkt aus diesem Branch löschen? Das kann nicht rückgängig gemacht werden.",
     "deleted": "Function {{slug}} gelöscht.",
     "backToList": "Zurück zu Functions",
-    "activationWarning": "Rufe die Function nach einem Update auf, um das Ergebnis zu prüfen. In dieser Umgebung hat Neon teilweise weiterhin die vorherige Revision ausgeliefert.",
+    "activationWarning": "Nach einem Update einen sicheren Test-Endpunkt aufrufen und dessen Antwortmarkierung prüfen. Im Live-Test dauerte die Aktivierung etwa zwei Minuten, obwohl Neon das neue Deployment bereits als aktiv meldete.",
     "language": "Sprache",
     "problems": "Probleme",
     "validate": "Function prüfen",
     "validationPassed": "Kompilierung erfolgreich · {{bytes}} Bytes · Node.js 24",
     "validationFailed": "Behebe die Fehler vor dem Deployment.",
     "copyUrl": "URL kopieren",
-    "urlCopied": "Function-URL kopiert."
+    "urlCopied": "Function-URL kopiert.",
+    "expectedMarker": "Erwartete, nicht geheime Antwortmarkierung",
+    "verificationHint": "Wähle eine eindeutige Markierung, die nur die erwartete Code- und Umgebungsversion zurückgibt. Die Prüfung sendet die gewählte GET- oder POST-Anfrage und kann Änderungen auslösen; verwende einen sicheren Handler. Eine passende Markierung belegt diese Antwort, nicht das Verhalten jeder Anfrage.",
+    "verifyRuntime": "Anfrage senden und Deployment prüfen",
+    "runtimeVerified": "Die erwartete Antwortmarkierung passte bei dieser Prüfung zu Deployment {{id}}.",
+    "runtimeMismatch": "Laufzeitprüfung fehlgeschlagen: Deployment {{id}} lieferte die erwartete Antwortmarkierung nicht. Das Update wird möglicherweise noch verteilt; warten und mit einem sicheren Handler erneut prüfen.",
+    "runtimeUnverified": "Deployment {{id}}: Laufzeit ungeprüft. Der Anbieterstatus allein bestätigt die laufende Version nicht.",
+    "verificationReasons": {
+      "superseded": "Das gewählte Deployment ist nicht mehr das neueste. Aktualisiere und prüfe das neue Deployment vor einer erneuten Laufzeitprüfung.",
+      "inactive": "Das gewählte Deployment ist noch nicht abgeschlossen und aktiv. Aktualisiere zunächst seinen Status.",
+      "response-mismatch": "Der Endpunkt lieferte andere Inhalte. Möglicherweise läuft noch alter Code oder alte Umgebungswerte.",
+      "http-error": "Der Endpunkt lieferte keine erfolgreiche HTTP-Antwort. Weiterleitungen werden nicht verfolgt."
+    }
   },
   "management": {
     "missingBinding": "Speichere Neon-Projekt und Branch unter Verbindung / Einrichtung, bevor du Dienste verwaltest.",
@@ -454,5 +466,9 @@
       "functions_invocations": "Functions-Aufrufe",
       "functions_egress_bytes": "Functions-Datenausgang"
     }
-  }
+  },
+  "storagePage": "Seite {{page}}",
+  "storageNext": "Nächste Objekte",
+  "storagePrevious": "Vorherige Objekte",
+  "storageReadTooLarge": "Textinhalte können bis 1 MiB gelesen werden. Wähle ein kleineres Objekt."
 }

@@ -3,7 +3,7 @@ import {act, renderHook, waitFor} from '@testing-library/react';
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 import {useAccountBrowser, type Project} from '../../src/hooks/useAccountBrowser';
 
-const {account} = vi.hoisted(() => ({
+const {account, provider} = vi.hoisted(() => ({
     account: {
         connect: vi.fn(),
         secretFields: vi.fn(),
@@ -11,8 +11,9 @@ const {account} = vi.hoisted(() => ({
         call: vi.fn(),
         importConnection: vi.fn(),
     },
+    provider: {current: null as Record<string, unknown> | null},
 }));
-vi.mock('@tabularis/plugin-api', () => ({usePluginAccount: () => account}));
+vi.mock('@tabularis/plugin-api', () => ({usePluginAccount: () => provider.current ?? account}));
 
 const resources = {databases: [{name: 'neondb'}], roles: [{name: 'owner'}], services: []};
 function deferred<T>() {
@@ -109,6 +110,7 @@ describe('Neon account browser', () => {
     });
     beforeEach(() => {
         vi.clearAllMocks();
+        provider.current = null;
         account.secretFields.mockResolvedValue(['NEON_API_KEY']);
         account.call.mockImplementation(async (method: string) =>
             method === 'account_projects'
@@ -200,6 +202,36 @@ describe('Neon account browser', () => {
         });
         expect(result.current.state.imported?.id).toBe('saved');
         expect(result.current.state.error).toBe('Refresh unavailable');
+        expect(account.importConnection).toHaveBeenCalledOnce();
+    });
+
+    it('keeps import completion when the host publishes an updated connection list', async () => {
+        const imported = {id: 'saved', name: 'Imported', warnings: []};
+        const pending = deferred<typeof imported>();
+        account.importConnection.mockReturnValue(pending.promise);
+        const completed = vi.fn();
+        const {result, rerender} = renderHook(() => useAccountBrowser(completed));
+        await waitFor(() => expect(result.current.state.connected).toBe(true));
+        await act(async () => {
+            await result.current.selectProject('p1');
+        });
+        await act(async () => {
+            await result.current.selectBranch('b1');
+        });
+        let request: Promise<void>;
+        act(() => {
+            request = result.current.importConnection(false);
+        });
+        // The sandbox publishes the newly saved connection before resolving the import call.
+        provider.current = {...account, connections: [{id: imported.id, name: imported.name}]};
+        rerender();
+        await act(async () => {
+            pending.resolve(imported);
+            await request;
+        });
+        expect(result.current.state.imported).toEqual(imported);
+        expect(result.current.state.pending).toBe(false);
+        expect(completed).toHaveBeenCalledOnce();
         expect(account.importConnection).toHaveBeenCalledOnce();
     });
 

@@ -1,5 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 import {identifier, text} from '../dist/database.js';
 import {start} from './rpc.mjs';
 
@@ -86,4 +88,77 @@ test('service metadata is available without connecting to Postgres', async () =>
     assert.equal(result.database, null);
     assert.equal(result.services.length, 6);
     assert.equal(result.connectionId, 'offline');
+});
+
+test('stdio connection envelopes isolate service credentials from the process and each other', async () => {
+    const previous = process.env.NEON_AI_GATEWAY_TOKEN;
+    process.env.NEON_AI_GATEWAY_TOKEN = 'synthetic-process-token';
+    const plugin = start();
+    if (previous === undefined) delete process.env.NEON_AI_GATEWAY_TOKEN;
+    else process.env.NEON_AI_GATEWAY_TOKEN = previous;
+    const call = (connectionId, method, secrets = {}) =>
+        plugin.call('extension', {
+            method,
+            args: {metadataOnly: true},
+            params: {
+                driver: 'neon',
+                host: 'unused.invalid',
+                username: 'owner',
+                password: 'synthetic',
+                database: 'neondb',
+            },
+            secrets,
+            context: {plugin_id: 'neon', connection_id: connectionId},
+        });
+    try {
+        const configured = await call('first', 'neon_status', {
+            NEON_AI_GATEWAY_TOKEN: 'synthetic-bound-token',
+        });
+        const empty = await call('second', 'neon_status');
+        assert.equal(configured.connectionId, 'first');
+        assert.equal(
+            configured.services.find((item) => item.name === 'AI Gateway').configured,
+            true,
+        );
+        assert.equal(empty.connectionId, 'second');
+        assert.equal(
+            empty.services.find((item) => item.name === 'AI Gateway').configured,
+            false,
+        );
+        assert(!JSON.stringify(configured).includes('synthetic-bound-token'));
+        await assert.rejects(call('second', 'neon_ai_models'), /Missing NEON_AI_GATEWAY/);
+    } finally {
+        plugin.close();
+    }
+});
+
+test('live management harness refuses implicit credentials and production scope before loading runtime', () => {
+    const optedIn = {NEON_MANAGEMENT_TEST_ALLOW_MUTATIONS: '1'};
+    const apiKey = {...optedIn, NEON_MANAGEMENT_TEST_API_KEY: 'synthetic-key'};
+    const scope = {
+        ...apiKey,
+        NEON_MANAGEMENT_TEST_PROJECT_ID: 'synthetic-project',
+        NEON_MANAGEMENT_TEST_BRANCH_ID: 'br-synthetic',
+    };
+    for (const [env, message] of [
+        [{}, /ALLOW_MUTATIONS/],
+        [optedIn, /explicit test API key or CLI profile/],
+        [
+            {...optedIn, NEON_MANAGEMENT_TEST_CLI_PROFILE: 'synthetic'},
+            /configuration directory explicitly/,
+        ],
+        [apiKey, /explicit disposable project and branch/],
+        [
+            {...scope, NEON_MANAGEMENT_TEST_EXPECT_BRANCH_NAME: 'production'},
+            /expected disposable/,
+        ],
+    ]) {
+        const result = spawnSync(
+            process.execPath,
+            [fileURLToPath(new URL('./management-e2e.mjs', import.meta.url))],
+            {env, encoding: 'utf8'},
+        );
+        assert.equal(result.status, 1);
+        assert.match(result.stderr, message);
+    }
 });

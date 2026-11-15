@@ -1,5 +1,11 @@
-import {useCallback, useEffect, useId, useMemo} from 'react';
-import {usePluginAccount, usePluginRpc, usePluginTranslation} from '@tabularis/plugin-api';
+import {useCallback, useEffect, useMemo, useState} from 'react';
+import {
+    publishPluginEvent,
+    usePluginEvent,
+    usePluginAccount,
+    usePluginRpc,
+    usePluginTranslation,
+} from '@tabularis/plugin-api';
 import {useNeonManagement} from './useNeonManagement';
 import {useTask} from './useTask';
 import {matchingBranchConnection} from '../utils/branches';
@@ -7,7 +13,7 @@ import type {BranchContext, BranchItem, BranchSnapshot} from '../types/branches'
 
 export function useBranches(connectionId: string) {
     const t = usePluginTranslation('neon');
-    const instanceId = useId();
+    const [instanceId] = useState(() => crypto.randomUUID());
     const account = usePluginAccount('neon');
     const rpc = usePluginRpc('neon', connectionId);
     const management = useNeonManagement(connectionId);
@@ -81,18 +87,21 @@ export function useBranches(connectionId: string) {
     useEffect(() => {
         void Promise.resolve().then(refresh);
     }, [refresh]);
-    useEffect(() => {
-        const changed = (event: Event) => {
+    const onBranchesChanged = useCallback(
+        (detail: unknown) => {
+            if (!detail || typeof detail !== 'object' || Array.isArray(detail)) return;
+            const event = detail as Record<string, unknown>;
             if (
-                event instanceof CustomEvent &&
-                event.detail?.projectId === scope?.projectId &&
-                event.detail?.origin !== instanceId
+                scope &&
+                event.projectId === scope.projectId &&
+                typeof event.origin === 'string' &&
+                event.origin !== instanceId
             )
                 void refresh();
-        };
-        window.addEventListener('tabularis:neon-branches-changed', changed);
-        return () => window.removeEventListener('tabularis:neon-branches-changed', changed);
-    }, [scope, instanceId, refresh]);
+        },
+        [scope, instanceId, refresh],
+    );
+    usePluginEvent('neon', 'branch-changed', onBranchesChanged);
     const openBranch = useCallback(
         (
             branchId: string,
@@ -133,11 +142,12 @@ export function useBranches(connectionId: string) {
             runAction(async () => {
                 await call<BranchItem | null>(method, args);
                 await refresh();
-                window.dispatchEvent(
-                    new CustomEvent('tabularis:neon-branches-changed', {
-                        detail: {projectId: scope?.projectId, origin: instanceId},
-                    }),
-                );
+                if (scope)
+                    await publishPluginEvent('neon', 'branch-changed', {
+                        projectId: scope.projectId,
+                        branchId: scope.branchId,
+                        origin: instanceId,
+                    });
                 return {message};
             }),
         [runAction, call, refresh, instanceId, scope],

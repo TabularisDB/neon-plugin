@@ -334,24 +334,45 @@ interface StoredObject {
     Size?: number;
     LastModified?: string;
 }
+interface StoragePage {
+    objects: StoredObject[];
+    nextContinuationToken: string | null;
+    prefix: string;
+    tokens: (string | undefined)[];
+}
 
 function Storage({connectionId}: ConnectedProps) {
     const t = usePluginTranslation('neon');
     const {call} = usePluginRpc('neon', connectionId);
-    const listing = useTask<StoredObject[]>();
+    const listing = useTask<StoragePage>();
     const action = useTask<{body?: string; message?: string}>();
     const [prefix, setPrefix] = useState('');
     const [key, setKey] = useState('tabularis/hello.txt');
     const [body, setBody] = useState('');
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [confirmPut, setConfirmPut] = useState(false);
-    const load = () => listing.run(() => call('neon_storage_list', {prefix}));
+    const selectedObject = listing.data?.objects.find((item) => item.Key === key);
+    const readUnavailable = selectedObject?.Size !== undefined && selectedObject.Size > 1024 * 1024;
+    const load = (tokens: (string | undefined)[] = [undefined], listedPrefix = prefix) =>
+        listing.run(async () => ({
+            ...(await call<Pick<StoragePage, 'objects' | 'nextContinuationToken'>>(
+                'neon_storage_list',
+                {
+                    prefix: listedPrefix,
+                    continuationToken: tokens.at(-1),
+                },
+            )),
+            prefix: listedPrefix,
+            tokens,
+        }));
     const mutate = async (method: 'neon_storage_put' | 'neon_storage_delete') => {
         setConfirmDelete(false);
         setConfirmPut(false);
         const result = await action.run(async () => {
             await call(method, method === 'neon_storage_put' ? {key, body} : {key});
-            return {message: t(method === 'neon_storage_put' ? 'objectSaved' : 'objectDeleted')};
+            return {
+                message: t(method === 'neon_storage_put' ? 'objectSaved' : 'objectDeleted'),
+            };
         });
         if (result) void load();
     };
@@ -384,12 +405,12 @@ function Storage({connectionId}: ConnectedProps) {
                 </div>
                 <Feedback {...listing} />
                 {listing.data ? (
-                    listing.data.length ? (
+                    listing.data.objects.length ? (
                         <>
                             <DataTable
                                 data={{
                                     columns: [t('objectKey'), t('bytes'), t('modified')],
-                                    rows: listing.data.map((item) => [
+                                    rows: listing.data.objects.map((item) => [
                                         item.Key,
                                         item.Size ?? null,
                                         item.LastModified ?? null,
@@ -397,7 +418,7 @@ function Storage({connectionId}: ConnectedProps) {
                                 }}
                             />
                             <p className="neon-result-count">
-                                {t('objectCount', {count: listing.data.length})}
+                                {t('objectCount', {count: listing.data.objects.length})}
                             </p>
                         </>
                     ) : (
@@ -406,17 +427,56 @@ function Storage({connectionId}: ConnectedProps) {
                 ) : (
                     !listing.pending && <ResultPlaceholder>{t('storageEmpty')}</ResultPlaceholder>
                 )}
+                {listing.data &&
+                    (listing.data.tokens.length > 1 || listing.data.nextContinuationToken) && (
+                        <div className="neon-actionbar">
+                            <button
+                                className="neon-button"
+                                disabled={listing.pending || listing.data.tokens.length === 1}
+                                onClick={() => {
+                                    if (listing.data)
+                                        void load(
+                                            listing.data.tokens.slice(0, -1),
+                                            listing.data.prefix,
+                                        );
+                                }}
+                            >
+                                {t('storagePrevious')}
+                            </button>
+                            <span>{t('storagePage', {page: listing.data.tokens.length})}</span>
+                            <button
+                                className="neon-button"
+                                disabled={listing.pending || !listing.data.nextContinuationToken}
+                                onClick={() => {
+                                    if (listing.data?.nextContinuationToken)
+                                        void load(
+                                            [
+                                                ...listing.data.tokens,
+                                                listing.data.nextContinuationToken,
+                                            ],
+                                            listing.data.prefix,
+                                        );
+                                }}
+                            >
+                                {t('storageNext')}
+                            </button>
+                        </div>
+                    )}
             </PanelSection>
             <div>
                 <PanelSection title={t('objectEditor')} hint={t('textObjectsHint')}>
-                    {listing.pending || listing.data?.length ? (
+                    {listing.pending || listing.data?.objects.length ? (
                         <>
                             <label className="neon-field-label" htmlFor="neon-existing-object">
                                 {t('existingObject')}
                             </label>
                             <PluginSelect
                                 id="neon-existing-object"
-                                value={listing.data?.some((item) => item.Key === key) ? key : ''}
+                                value={
+                                    listing.data?.objects.some((item) => item.Key === key)
+                                        ? key
+                                        : ''
+                                }
                                 placeholder={t('chooseObject')}
                                 disabled={action.pending}
                                 loading={listing.pending}
@@ -427,7 +487,7 @@ function Storage({connectionId}: ConnectedProps) {
                                     setConfirmPut(false);
                                 }}
                                 options={
-                                    listing.data?.map((item) => ({
+                                    listing.data?.objects.map((item) => ({
                                         value: item.Key,
                                         label: item.Key,
                                     })) ?? []
@@ -478,7 +538,8 @@ function Storage({connectionId}: ConnectedProps) {
                             </button>
                             <button
                                 className="neon-button"
-                                disabled={action.pending || !key.trim()}
+                                disabled={action.pending || !key.trim() || readUnavailable}
+                                title={readUnavailable ? t('storageReadTooLarge') : undefined}
                                 onClick={() =>
                                     void action.run(() => call('neon_storage_get', {key}))
                                 }
@@ -497,6 +558,7 @@ function Storage({connectionId}: ConnectedProps) {
                             {t('deleteObject')}
                         </button>
                     </div>
+                    {readUnavailable && <p className="neon-hint">{t('storageReadTooLarge')}</p>}
                     {(confirmDelete || confirmPut) && (
                         <div className="neon-confirmation">
                             <p>
@@ -691,9 +753,7 @@ function Realtime({connectionId}: ConnectedProps) {
     const t = usePluginTranslation('neon');
     const {call} = usePluginRpc('neon', connectionId);
     const task = useTask<Record<string, unknown>[]>();
-    const [query, setQuery] = useState(
-        'SELECT id, title, body, updated_at FROM tabularis_demo.notes ORDER BY id LIMIT 20',
-    );
+    const [query, setQuery] = useState('SELECT 1 AS value');
     const [column, setColumn] = useState('');
     const [until, setUntil] = useState('');
     const valid = /^\s*select\b/i.test(query) && (!until || !!column.trim());
@@ -727,7 +787,7 @@ function Realtime({connectionId}: ConnectedProps) {
                                 id="neon-column"
                                 value={column}
                                 onChange={(event) => setColumn(event.target.value)}
-                                placeholder="title"
+                                placeholder="value"
                             />
                         </div>
                         <div>

@@ -117,7 +117,7 @@
   "objectCount": "{{count}} objects",
   "storageEmpty": "List the bucket to browse objects. Use the prefix to narrow the results.",
   "objectEditor": "Text object",
-  "textObjectsHint": "Read an existing object or prepare text to save. Writes require confirmation.",
+  "textObjectsHint": "Read UTF-8 text objects up to 1 MiB or prepare text to save. Writes require confirmation.",
   "response": "Response",
   "aiEmpty": "The model response will appear here after you send a prompt.",
   "functionName": "Function",
@@ -308,14 +308,26 @@
     "deleteWarning": "Delete {{slug}} and its deployed endpoint from this branch? This cannot be undone.",
     "deleted": "Function {{slug}} deleted.",
     "backToList": "Back to functions",
-    "activationWarning": "After updating, invoke the function to verify the result. In this environment, Neon has sometimes continued serving the previous revision.",
+    "activationWarning": "After updating, invoke a safe test endpoint and verify its response marker. Live tests observed roughly two minutes of propagation while Neon already reported the new deployment active.",
     "language": "Language",
     "problems": "Problems",
     "validate": "Validate function",
     "validationPassed": "Compilation passed · {{bytes}} bytes · Node.js 24",
     "validationFailed": "Fix the errors before deploying.",
     "copyUrl": "Copy URL",
-    "urlCopied": "Function URL copied."
+    "urlCopied": "Function URL copied.",
+    "expectedMarker": "Expected non-secret response marker",
+    "verificationHint": "Choose a unique marker returned only by the code and environment revision you expect. Verification sends the selected GET or POST request and can have side effects; use a safe handler. A matching marker proves this response, not the behavior of every request.",
+    "verifyRuntime": "Send request and verify deployment",
+    "runtimeVerified": "Expected response marker matched deployment {{id}} during this check.",
+    "runtimeMismatch": "Runtime verification failed: deployment {{id}} did not return the expected response marker. The update may still be propagating; wait and retry with a safe handler.",
+    "runtimeUnverified": "Deployment {{id}}: runtime not verified. Provider status alone does not confirm the running revision.",
+    "verificationReasons": {
+      "superseded": "The requested deployment is no longer the latest. Refresh and review the new deployment before verifying it.",
+      "inactive": "The requested deployment has not completed and become active. Refresh its status before trying again.",
+      "response-mismatch": "The endpoint returned different content. It may still be serving old code or environment values.",
+      "http-error": "The endpoint did not return a successful HTTP response. Redirects are not followed."
+    }
   },
   "management": {
     "missingBinding": "Save the Neon project and branch in Connection / Setup before managing services.",
@@ -454,5 +466,9 @@
       "functions_invocations": "Function invocations",
       "functions_egress_bytes": "Functions egress"
     }
-  }
+  },
+  "storagePage": "Page {{page}}",
+  "storageNext": "Next objects",
+  "storagePrevious": "Previous objects",
+  "storageReadTooLarge": "Text reads are limited to 1 MiB. Choose a smaller object."
 }

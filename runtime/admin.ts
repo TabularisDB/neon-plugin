@@ -42,10 +42,6 @@ export async function admin(method: string, _args: Params, context: Params): Pro
         return database('execute_query', {
             query: 'SELECT id, name, email, "emailVerified", "createdAt" FROM neon_auth."user" ORDER BY "createdAt" DESC LIMIT 100',
         });
-    if (method === 'neon_demo_notes')
-        return database('execute_query', {
-            query: 'SELECT id, title, body, owner_id, updated_at FROM tabularis_demo.notes ORDER BY updated_at DESC LIMIT 100',
-        });
     if (method === 'neon_project_branches') {
         const project = env('NEON_PROJECT_ID');
         const response = await fetch(

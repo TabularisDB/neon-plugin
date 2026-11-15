@@ -28,6 +28,7 @@ interface FunctionItem {
     updatedAt: string | null;
 }
 interface FunctionDetails extends FunctionItem {
+    deploymentId: string | null;
     source: string | null;
     language?: 'javascript' | 'typescript';
     environmentKeys: string[];
@@ -37,6 +38,11 @@ interface FunctionLogs {
     entries: {timestamp: string; level: string; message: string}[];
     available: boolean;
     reason?: string;
+}
+interface RuntimeVerification {
+    deploymentId: string;
+    runtimeVerification: 'unverified' | 'verified' | 'mismatch';
+    reason?: 'superseded' | 'inactive' | 'response-mismatch' | 'http-error';
 }
 type Management = ReturnType<typeof useNeonManagement>;
 
@@ -226,12 +232,27 @@ function FunctionDetail({
     const [deleted, setDeleted] = useState(false);
     const [method, setMethod] = useState<'GET' | 'POST'>('GET');
     const [body, setBody] = useState('');
+    const [expectedMarker, setExpectedMarker] = useState('');
+    const [requestedDeploymentId, setRequestedDeploymentId] = useState<string>();
     const [localError, setLocalError] = useState<string>();
     const details = useTask<FunctionDetails>();
     const mutation = useTask<{message: string}>();
     const invocation = useTask<{status: number; body: string}>();
+    const verification = useTask<RuntimeVerification & {requestKey: string}>();
     const logs = useTask<FunctionLogs>();
     const language = draft.language ?? 'javascript';
+    const verificationDeploymentId = requestedDeploymentId ?? details.data?.deploymentId;
+    const verificationRequestKey = JSON.stringify([
+        verificationDeploymentId,
+        expectedMarker,
+        method,
+        body,
+    ]);
+    const verificationResult =
+        verification.data?.deploymentId === verificationDeploymentId &&
+        verification.data?.requestKey === verificationRequestKey
+            ? verification.data
+            : undefined;
     type Diagnostic = {
         severity: 'error' | 'warning' | 'info';
         message: string;
@@ -268,7 +289,11 @@ function FunctionDetail({
         if (!value) return;
         setName(value.name);
         if (!readFunctionDraft(connectionId, draftKey) && value.source !== null) {
-            const next = {source: value.source, slug, language: value.language ?? 'javascript'};
+            const next = {
+                source: value.source,
+                slug,
+                language: value.language ?? 'javascript',
+            };
             writeFunctionDraft(connectionId, draftKey, next);
             setDraft(next);
         }
@@ -281,6 +306,7 @@ function FunctionDetail({
         mutation.pending ||
         invocation.pending ||
         logs.pending ||
+        verification.pending ||
         validation.pending;
     const updateDraft = (next: typeof draft) => {
         writeFunctionDraft(connectionId, draftKey, next);
@@ -288,7 +314,11 @@ function FunctionDetail({
         setConfirmation(undefined);
     };
     const backToList = () =>
-        openWorkspace({id: 'functions', title: `Neon · ${t('tabs.functions')}`, connectionId});
+        openWorkspace({
+            id: 'functions',
+            title: `Neon · ${t('tabs.functions')}`,
+            connectionId,
+        });
     const environmentChanges = () => {
         try {
             return parseEnvironmentChanges(environment || '{}');
@@ -309,7 +339,12 @@ function FunctionDetail({
                 ...(Object.keys(envChanges).length ? {envChanges} : {}),
             });
             if (!mounted.current)
-                return {message: t('functionsManager.deploymentStarted', {status: result.status})};
+                return {
+                    message: t('functionsManager.deploymentStarted', {
+                        status: result.status,
+                    }),
+                };
+            setRequestedDeploymentId(result.id);
             setEnvironment('');
             if (create) {
                 writeFunctionDraft(connectionId, draft.slug, {
@@ -324,7 +359,11 @@ function FunctionDetail({
                     connectionId,
                 });
             } else await load();
-            return {message: t('functionsManager.deploymentStarted', {status: result.status})};
+            return {
+                message: t('functionsManager.deploymentStarted', {
+                    status: result.status,
+                }),
+            };
         });
     };
     if (deleted)
@@ -362,7 +401,10 @@ function FunctionDetail({
                             type="button"
                             className="neon-button"
                             disabled={busy}
-                            onClick={() => void load()}
+                            onClick={() => {
+                                setRequestedDeploymentId(undefined);
+                                void load();
+                            }}
                         >
                             {t('refresh')}
                         </button>
@@ -374,6 +416,27 @@ function FunctionDetail({
                 error={details.error ?? mutation.error ?? localError}
             />
             {!create && <p className="neon-feedback">{t('functionsManager.activationWarning')}</p>}
+            {!create && (
+                <p
+                    role="status"
+                    className={
+                        verificationResult?.runtimeVerification === 'verified'
+                            ? 'neon-success'
+                            : verificationResult?.runtimeVerification === 'mismatch'
+                              ? 'neon-error'
+                              : 'neon-hint'
+                    }
+                >
+                    {t(
+                        verificationResult?.runtimeVerification === 'verified'
+                            ? 'functionsManager.runtimeVerified'
+                            : verificationResult?.runtimeVerification === 'mismatch'
+                              ? 'functionsManager.runtimeMismatch'
+                              : 'functionsManager.runtimeUnverified',
+                        {id: verificationDeploymentId ?? '—'},
+                    )}
+                </p>
+            )}
             {mutation.data && (
                 <p className="neon-success" role="status">
                     {mutation.data.message}
@@ -564,8 +627,15 @@ function FunctionDetail({
                                 ...(await call<{
                                     valid: boolean;
                                     bundleBytes: number;
-                                    diagnostics: {message: string; line: number; column: number}[];
-                                }>('account_function_validate', {source: draft.source, language})),
+                                    diagnostics: {
+                                        message: string;
+                                        line: number;
+                                        column: number;
+                                    }[];
+                                }>('account_function_validate', {
+                                    source: draft.source,
+                                    language,
+                                })),
                                 source: draft.source,
                                 language,
                             }))
@@ -652,12 +722,16 @@ function FunctionDetail({
                             disabled={busy || !details.data || !environment.trim()}
                             onClick={() =>
                                 void mutation.run(async () => {
-                                    await call('account_function_deploy', {
-                                        slug,
-                                        envChanges: environmentChanges(),
-                                    });
+                                    const result = await call<{id: string}>(
+                                        'account_function_deploy',
+                                        {
+                                            slug,
+                                            envChanges: environmentChanges(),
+                                        },
+                                    );
                                     if (!mounted.current)
                                         return {message: t('functionsManager.environmentSaved')};
+                                    setRequestedDeploymentId(result.id);
                                     setEnvironment('');
                                     await load();
                                     return {message: t('functionsManager.environmentSaved')};
@@ -725,6 +799,57 @@ function FunctionDetail({
                                 <span className="neon-status">HTTP {invocation.data.status}</span>
                                 <pre className="neon-output">{invocation.data.body}</pre>
                             </div>
+                        )}
+                        <label className="neon-field-label" htmlFor={`${id}-expected-marker`}>
+                            {t('functionsManager.expectedMarker')}
+                        </label>
+                        <input
+                            id={`${id}-expected-marker`}
+                            className="neon-field"
+                            value={expectedMarker}
+                            maxLength={1024}
+                            disabled={busy}
+                            autoComplete="off"
+                            spellCheck={false}
+                            onChange={(event) => setExpectedMarker(event.target.value)}
+                        />
+                        <p className="neon-hint">{t('functionsManager.verificationHint')}</p>
+                        <div className="neon-row">
+                            <button
+                                type="button"
+                                className="neon-button"
+                                disabled={
+                                    busy ||
+                                    !details.data?.url ||
+                                    !verificationDeploymentId ||
+                                    !expectedMarker.trim()
+                                }
+                                onClick={() =>
+                                    void verification.run(async () => ({
+                                        ...(await call<RuntimeVerification>(
+                                            'account_function_verify',
+                                            {
+                                                slug,
+                                                method,
+                                                expectedDeploymentId: verificationDeploymentId,
+                                                expectedMarker,
+                                                ...(method === 'POST' ? {body} : {}),
+                                            },
+                                        )),
+                                        requestKey: verificationRequestKey,
+                                    }))
+                                }
+                            >
+                                {t('functionsManager.verifyRuntime')}
+                            </button>
+                        </div>
+                        <OperationFeedback pending={false} error={verification.error} />
+                        {verificationResult?.reason && (
+                            <p className="neon-feedback neon-error" role="alert">
+                                {t(
+                                    `functionsManager.verificationReasons.${verificationResult.reason}`,
+                                )}
+                            </p>
                         )}
                     </details>
                     <details className="neon-disclosure">

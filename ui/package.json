@@ -9,7 +9,7 @@
     "test:host": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
-    "@tabularis/plugin-api": "file:../vendor/tabularis-plugin-api-0.4.0.tgz"
+    "@tabularis/plugin-api": "file:../vendor/tabularis-plugin-api-0.4.1.tgz"
   },
   "peerDependencies": {
     "react": "^19.0.0"
