@@ -1,4 +1,5 @@
 import {createNeonClient, isNeonError, type NeonClient} from '@neon/sdk';
+import {createHash} from 'node:crypto';
 import type {Params} from './database.js';
 import {branchMethods, manageBranches} from './branches.js';
 import {cliCredential} from './cliAuth.js';
@@ -157,7 +158,8 @@ export async function account(
         if (branchMethods.has(method))
             return await manageBranches(client, method, args, branchScope);
         if (managementMethods.has(method)) {
-            const action = () => manage(client, method, args, branchScope, fetcher);
+            const owner = createHash('sha256').update(key).digest('hex');
+            const action = () => manage(client, method, args, branchScope, fetcher, owner);
             return await ([
                 'account_function_deploy',
                 'account_function_delete',

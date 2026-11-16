@@ -10,6 +10,7 @@ import {useAuthRead} from './hooks/useAuthRead';
 import {useTask} from './hooks/useTask';
 import {PanelSection} from './components/PanelSection';
 import type {AuthUserDetails, AuthUsersPage} from './types/authManagement';
+import {AuthControl} from './components/AuthControl';
 
 const authStyles = `
 .neon-auth {min-width:0;max-width:1100px;margin:0 auto}
@@ -29,9 +30,24 @@ const authStyles = `
 `;
 
 export function AuthManager({connectionId, userId}: {connectionId: string; userId?: string}) {
+    const t = usePluginTranslation('neon');
+    const [showControls, setShowControls] = useState(false);
     return (
         <div className="neon-auth">
             <style>{authStyles}</style>
+            <details
+                className="neon-disclosure"
+                onToggle={(event) => setShowControls(event.currentTarget.open)}
+            >
+                <summary>{t(userId ? 'authControl.reset' : 'authControl.open')}</summary>
+                {showControls && (
+                    <AuthControl
+                        key={`${connectionId}:${userId ?? 'directory'}`}
+                        connectionId={connectionId}
+                        userId={userId}
+                    />
+                )}
+            </details>
             {userId ? (
                 <AuthUserView
                     key={`${connectionId}:${userId}`}

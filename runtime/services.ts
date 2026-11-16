@@ -4,18 +4,34 @@ import {
     GetObjectCommand,
     DeleteObjectCommand,
     ListObjectsV2Command,
+    ListBucketsCommand,
 } from '@aws-sdk/client-s3';
 import {createRealtime, rawSql} from '@neon/realtime/server';
 import {env} from './env.js';
 import {text, type Params} from './database.js';
 import {readStorageText} from './storage.js';
+import {realtimeSession} from './realtime.js';
+import {storageTransfer, storageBucket} from './storageTransfers.js';
 
 async function json(response: Response): Promise<unknown> {
     if (!response.ok) throw new Error(`Neon service returned HTTP ${response.status}`);
     return response.json();
 }
 
-export async function service(method: string, args: Params): Promise<unknown> {
+export async function service(
+    method: string,
+    args: Params,
+    connectionId?: string,
+): Promise<unknown> {
+    if (method.startsWith('neon_storage_upload_') || method === 'neon_storage_download') {
+        if (!connectionId) throw new Error('A saved connection is required for file transfers');
+        return storageTransfer(method, args, connectionId);
+    }
+    if (['neon_realtime_start', 'neon_realtime_poll', 'neon_realtime_stop'].includes(method)) {
+        if (!connectionId)
+            throw new Error('A saved connection is required for Realtime subscriptions');
+        return realtimeSession(method, args, connectionId);
+    }
     const timeout = AbortSignal.timeout(30000);
     switch (method) {
         case 'neon_auth_session':
@@ -88,6 +104,7 @@ export async function service(method: string, args: Params): Promise<unknown> {
             );
         }
         case 'neon_storage_list':
+        case 'neon_storage_buckets':
         case 'neon_storage_put':
         case 'neon_storage_get':
         case 'neon_storage_delete': {
@@ -100,8 +117,18 @@ export async function service(method: string, args: Params): Promise<unknown> {
                     secretAccessKey: env('AWS_SECRET_ACCESS_KEY'),
                 },
             });
-            const Bucket = 'assets';
+            const Bucket = storageBucket(args.bucket);
             try {
+                if (method === 'neon_storage_buckets') {
+                    const result = await s3.send(new ListBucketsCommand({}), {
+                        abortSignal: timeout,
+                    });
+                    return {
+                        buckets: (result.Buckets ?? [])
+                            .map((bucket) => bucket.Name)
+                            .filter((name) => typeof name === 'string'),
+                    };
+                }
                 if (method === 'neon_storage_list') {
                     if (
                         args.prefix !== undefined &&

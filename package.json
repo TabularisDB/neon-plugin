@@ -1,6 +1,7 @@
 {
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1160.0",
+    "@aws-sdk/s3-request-presigner": "3.1160.0",
     "@neon/realtime": "^0.1.2",
     "@neon/sdk": "7.6.1",
     "@tabularis/explain": "^0.2.0",
@@ -17,7 +18,7 @@
     "typescript": "^7.0.2"
   },
   "name": "tabularis-neon-plugin",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -26,7 +27,7 @@
   "scripts": {
     "build": "pnpm build:runtime && pnpm build:ui",
     "start": "node dist/driver.js",
-    "test": "node --test tests/unit.mjs tests/account.mjs tests/management.mjs tests/cli-auth.mjs tests/branches.mjs tests/usage.mjs tests/package.mjs tests/sql-pagination.mjs tests/storage.mjs",
+    "test": "node --test tests/unit.mjs tests/account.mjs tests/management.mjs tests/cli-auth.mjs tests/branches.mjs tests/usage.mjs tests/package.mjs tests/sql-pagination.mjs tests/storage.mjs tests/auth-management.mjs tests/storage-transfers.mjs tests/realtime.mjs",
     "build:runtime": "tsc -p tsconfig.json",
     "build:ui": "pnpm --dir ui build",
     "package": "pnpm build && node scripts/package.mjs",
