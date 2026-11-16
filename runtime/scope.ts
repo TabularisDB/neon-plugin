@@ -19,7 +19,16 @@ const operations = new Set([
     'neon_storage_put',
     'neon_storage_get',
     'neon_storage_delete',
+    'neon_storage_buckets',
+    'neon_storage_download',
+    'neon_storage_upload_start',
+    'neon_storage_upload_chunk',
+    'neon_storage_upload_complete',
+    'neon_storage_upload_abort',
     'neon_realtime_snapshot',
+    'neon_realtime_start',
+    'neon_realtime_poll',
+    'neon_realtime_stop',
     'neon_project_branches',
 ]);
 
@@ -111,6 +120,6 @@ export async function extension(request: Params): Promise<unknown> {
             method === 'neon_project_branches'
         )
             return admin(method, args, context);
-        return service(method, args);
+        return service(method, args, context.connection_id as string);
     });
 }

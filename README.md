@@ -1,11 +1,10 @@
 # Neon for Tabularis (preview)
 
 A native Neon workspace for the Tabularis desktop database client: PostgreSQL,
-branches, Auth, private text objects, Functions, Realtime and the AI Gateway.
+branches, Auth, file storage, Functions, live queries and the AI Gateway.
 
-**This is a preview.** It requires the provider-workspace Core changes and plugin
-sandbox API **0.4.1**, plus acceptance of the `cloud` package kind. Stock releases without the provider bridge do not include that API. See [Core PR #1445](https://github.com/TabularisDB/tabularis/pull/1445) and
-`CORE_INTEGRATION.json` for the required source revision.
+**This is a preview.** Version 0.4 requires **Tabularis 0.33.0+** and host sandbox
+API **0.4.1**. `CORE_INTEGRATION.json` pins the compatible source revision used in CI.
 
 **Observed activation delay:** Live SDK and independent HTTP tests confirmed that
 Neon can report a new deployment as completed/active while requests still execute
@@ -54,18 +53,25 @@ plugin UI. CLI login runs on the Tabularis host, also in web mode.
 - **Branches:** list, create from an explicit parent, rename, open/reuse separate
   connections, and confirm deletion with protection for local bindings.
 - **Auth:** search/paginate, inspect users, create identities, change user/admin
-  roles and confirm deletion. Password reset, invitations and session revocation
-  are not implemented.
-- **Storage:** list/read/write/delete text objects in the private `assets` bucket.
-  Object lists use continuation tokens and bounded next/previous pages. Writes
-  require confirmation; arbitrary bucket selection is not implemented.
+  roles and confirm deletion. Auth organization invitations can be created, listed
+  and cancelled; Auth administrators can set a new password for a selected user.
+  These actions require a separate application Auth login, described below.
+  Revoking other users' sessions is not implemented.
+- **Storage:** choose a bucket, paginate object listings, upload binary/text files
+  up to Neon's 10 GiB object limit, and download originals through a 60-second
+  signed attachment URL. Multipart uploads use bounded chunks, support cancellation,
+  and clean up abandoned transfers. The text editor retains its 1 MiB UTF-8 preview
+  limit; that limit does not apply to file downloads. Writes require confirmation.
 - **Functions:** Monaco JS/TS syntax and type diagnostics, compile validation,
   initial deployment, rename, environment patches, GET/POST invocation, available
   logs and deletion. Explicit runtime checks compare a nonsecret response marker
   with the selected deployment and never equate deployment acceptance with activation.
   Original remote source cannot be downloaded. External packages need CLI bundling.
-- **Realtime:** a bounded live SQL snapshot and waiting for a matching value;
-  the UI is not a general streaming-subscription manager.
+- **Realtime:** start/stop a persistent live-query subscription and see committed
+  changes in the results. The server holds the Neon WebSocket; UI polling delivers
+  revisions without rerunning the SQL. Results are bounded to 1,000 rows/1 MiB,
+  with an explicit error rather than silent truncation. Abandoned leases close
+  after one minute. One-off snapshots and wait-for-value queries remain available.
 - **AI Gateway:** enabled models and a real completion. The UI's 64-token response
   cap is a prototype limit, not a Neon quota.
 - **Usage:** scoped consumption and resource caps when the API provides them.
@@ -76,6 +82,25 @@ Importing discovers enabled services without provisioning or rotating them.
 Creating Storage/AI service credentials is an explicit opt-in. Disconnecting the
 local account does not delete remote resources or invalidate independent SQL
 connections.
+
+### Auth organization invitations and password reset
+
+Expand **Organization invitations** in the Auth directory, or **Reset user password**
+on a user's detail page. Sign in with a user from that branch's application Auth
+service and an application origin already allowed in the project's Auth settings.
+An existing organization owner/admin can invite members; resetting passwords
+requires the Auth `admin` role. This is separate from the Neon Console API key.
+
+The Managed Auth Organization plugin must be enabled for invitations. Email delivery
+and the application's invitation-acceptance page follow the project's Auth settings;
+an invitation record alone is not proof that an email was sent. See Neon's
+[Organization guide](https://neon.com/docs/auth/guides/plugins/organization).
+
+Provider cookies stay in process memory, not plugin UI or settings. The workspace
+renews a two-minute lease; abandoned sessions are discarded and sign-out is attempted.
+Local sessions have a one-hour hard expiry. Password changes use the documented
+[Auth admin API](https://neon.com/docs/auth/guides/plugins/admin), not direct writes
+to Auth's internal database tables.
 
 ## Screenshots
 
@@ -90,7 +115,7 @@ indicators and account setup notices belong to the captured preview build.
 
 ## Build and test
 
-The vendored public SDK tarball pins the unreleased Core API types; no private
+The vendored public SDK tarball pins the compatible Core API types; no private
 Core source is required to build these UI bundles.
 
 ```sh

@@ -1,4 +1,5 @@
 import {createNeonClient, isNeonError, type NeonClient} from '@neon/sdk';
+import {createHash} from 'node:crypto';
 import type {Params} from './database.js';
 import {branchMethods, manageBranches} from './branches.js';
 import {cliCredential} from './cliAuth.js';
@@ -157,7 +158,8 @@ export async function account(
         if (branchMethods.has(method))
             return await manageBranches(client, method, args, branchScope);
         if (managementMethods.has(method)) {
-            const action = () => manage(client, method, args, branchScope, fetcher);
+            const owner = createHash('sha256').update(key).digest('hex');
+            const action = () => manage(client, method, args, branchScope, fetcher, owner);
             return await ([
                 'account_function_deploy',
                 'account_function_delete',
@@ -228,7 +230,7 @@ export async function account(
             if (buckets.warning) warnings.push(buckets.warning);
             if (buckets.value && !buckets.value.some((item) => item.name === 'assets'))
                 warnings.push(
-                    'The Storage view currently browses the assets bucket, which is absent on this branch.',
+                    'This branch has no default assets bucket; select an existing bucket in Storage.',
                 );
         }
         if (discovered.ai.value?.enabled)
@@ -238,10 +240,6 @@ export async function account(
                 bundle[`NEON_FUNCTION_${item.slug.toUpperCase().replaceAll('-', '_')}_BASE_URL`] =
                     item.invocation_url;
         }
-        if (discovered.functions.value?.length && !bundle.NEON_FUNCTION_HELLO_BASE_URL)
-            warnings.push(
-                'Functions were discovered; the current invocation view requires a deployed hello function.',
-            );
         if (
             discovered.realtime.value?.enabled &&
             !discovered.realtime.value.pending &&

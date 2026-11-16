@@ -9,6 +9,8 @@ import {
     type PluginQueryResult,
 } from '@tabularis/plugin-api';
 import {useTask} from './hooks/useTask';
+import {useLiveRealtime} from './hooks/useLiveRealtime';
+import {StorageFileTransfer} from './components/StorageFileTransfer';
 import {DataTable} from './components/DataTable';
 import {
     credentialNames,
@@ -335,6 +337,7 @@ interface StoredObject {
     LastModified?: string;
 }
 interface StoragePage {
+    bucket: string;
     objects: StoredObject[];
     nextContinuationToken: string | null;
     prefix: string;
@@ -344,8 +347,14 @@ interface StoragePage {
 function Storage({connectionId}: ConnectedProps) {
     const t = usePluginTranslation('neon');
     const {call} = usePluginRpc('neon', connectionId);
-    const listing = useTask<StoragePage>();
+    const listingTask = useTask<StoragePage>();
     const action = useTask<{body?: string; message?: string}>();
+    const buckets = useTask<{buckets: string[]}>();
+    const [bucket, setBucket] = useState('assets');
+    const listing = {
+        ...listingTask,
+        data: listingTask.data?.bucket === bucket ? listingTask.data : undefined,
+    };
     const [prefix, setPrefix] = useState('');
     const [key, setKey] = useState('tabularis/hello.txt');
     const [body, setBody] = useState('');
@@ -353,23 +362,32 @@ function Storage({connectionId}: ConnectedProps) {
     const [confirmPut, setConfirmPut] = useState(false);
     const selectedObject = listing.data?.objects.find((item) => item.Key === key);
     const readUnavailable = selectedObject?.Size !== undefined && selectedObject.Size > 1024 * 1024;
-    const load = (tokens: (string | undefined)[] = [undefined], listedPrefix = prefix) =>
+    const load = (
+        tokens: (string | undefined)[] = [undefined],
+        listedPrefix = prefix,
+        listedBucket = bucket,
+    ) =>
         listing.run(async () => ({
             ...(await call<Pick<StoragePage, 'objects' | 'nextContinuationToken'>>(
                 'neon_storage_list',
                 {
+                    ...(listedBucket === 'assets' ? {} : {bucket: listedBucket}),
                     prefix: listedPrefix,
                     continuationToken: tokens.at(-1),
                 },
             )),
             prefix: listedPrefix,
+            bucket: listedBucket,
             tokens,
         }));
     const mutate = async (method: 'neon_storage_put' | 'neon_storage_delete') => {
         setConfirmDelete(false);
         setConfirmPut(false);
         const result = await action.run(async () => {
-            await call(method, method === 'neon_storage_put' ? {key, body} : {key});
+            await call(method, {
+                ...(bucket === 'assets' ? {} : {bucket}),
+                ...(method === 'neon_storage_put' ? {key, body} : {key}),
+            });
             return {
                 message: t(method === 'neon_storage_put' ? 'objectSaved' : 'objectDeleted'),
             };
@@ -381,8 +399,39 @@ function Storage({connectionId}: ConnectedProps) {
             <PanelSection
                 title={t('objects')}
                 hint={t('storageDescription')}
-                actions={<code className="neon-code">assets</code>}
+                actions={<code className="neon-code">{bucket}</code>}
             >
+                <label className="neon-field-label" htmlFor="neon-bucket">
+                    {t('files.bucket')}
+                </label>
+                <div className="neon-inline-actions">
+                    <input
+                        id="neon-bucket"
+                        className="neon-field"
+                        list="neon-buckets"
+                        value={bucket}
+                        onChange={(event) => {
+                            setBucket(event.target.value);
+                            setKey('');
+                            setBody('');
+                            setConfirmPut(false);
+                            setConfirmDelete(false);
+                        }}
+                    />
+                    <datalist id="neon-buckets">
+                        {buckets.data?.buckets.map((name) => (
+                            <option key={name} value={name} />
+                        ))}
+                    </datalist>
+                    <button
+                        className="neon-button"
+                        disabled={buckets.pending}
+                        onClick={() => void buckets.run(() => call('neon_storage_buckets'))}
+                    >
+                        {t('files.loadBuckets')}
+                    </button>
+                </div>
+                <Feedback {...buckets} />
                 <div className="neon-filterbar">
                     <div className="neon-grow">
                         <label className="neon-field-label" htmlFor="neon-prefix">
@@ -541,10 +590,31 @@ function Storage({connectionId}: ConnectedProps) {
                                 disabled={action.pending || !key.trim() || readUnavailable}
                                 title={readUnavailable ? t('storageReadTooLarge') : undefined}
                                 onClick={() =>
-                                    void action.run(() => call('neon_storage_get', {key}))
+                                    void action.run(() =>
+                                        call('neon_storage_get', {
+                                            ...(bucket === 'assets' ? {} : {bucket}),
+                                            key,
+                                        }),
+                                    )
                                 }
                             >
                                 {t('readObject')}
+                            </button>
+                            <button
+                                className="neon-button"
+                                disabled={action.pending || !key.trim()}
+                                onClick={() =>
+                                    void action.run(async () => {
+                                        const result = await call<{url: string}>(
+                                            'neon_storage_download',
+                                            {bucket, key},
+                                        );
+                                        await openUrl(result.url);
+                                        return {message: t('files.downloadStarted')};
+                                    })
+                                }
+                            >
+                                {t('files.download')}
                             </button>
                         </div>
                         <button
@@ -564,6 +634,7 @@ function Storage({connectionId}: ConnectedProps) {
                             <p>
                                 {t(confirmDelete ? 'deleteObjectConfirm' : 'putObjectConfirm', {
                                     key,
+                                    bucket,
                                 })}
                             </p>
                             <div className="neon-inline-actions">
@@ -598,6 +669,13 @@ function Storage({connectionId}: ConnectedProps) {
                         </p>
                     )}
                 </PanelSection>
+                <StorageFileTransfer
+                    key={`${connectionId}:${bucket}`}
+                    connectionId={connectionId}
+                    bucket={bucket}
+                    prefix={prefix}
+                    onUploaded={() => void load()}
+                />
                 {action.data?.body !== undefined && (
                     <PanelSection title={t('response')}>
                         <pre className="neon-output">{action.data.body}</pre>
@@ -753,10 +831,12 @@ function Realtime({connectionId}: ConnectedProps) {
     const t = usePluginTranslation('neon');
     const {call} = usePluginRpc('neon', connectionId);
     const task = useTask<Record<string, unknown>[]>();
+    const live = useLiveRealtime(connectionId);
     const [query, setQuery] = useState('SELECT 1 AS value');
     const [column, setColumn] = useState('');
     const [until, setUntil] = useState('');
-    const valid = /^\s*select\b/i.test(query) && (!until || !!column.trim());
+    const valid = /^\s*(select|with)\b/i.test(query) && (!until || !!column.trim());
+    const data = live.result ? live.result.rows : task.data;
     return (
         <div className="neon-view">
             <PanelSection
@@ -774,6 +854,7 @@ function Realtime({connectionId}: ConnectedProps) {
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                     spellCheck={false}
+                    disabled={live.active || live.pending}
                 />
                 <details className="neon-disclosure">
                     <summary>{t('waitOptions')}</summary>
@@ -808,36 +889,63 @@ function Realtime({connectionId}: ConnectedProps) {
                 <div className="neon-actionbar">
                     <button
                         className="neon-button neon-button-primary"
-                        disabled={!valid || task.pending}
-                        onClick={() =>
+                        disabled={!valid || live.active || live.pending || task.pending}
+                        onClick={() => void live.start(query)}
+                    >
+                        {t('live.start')}
+                    </button>
+                    <button
+                        className="neon-button"
+                        disabled={!live.active && !live.pending}
+                        onClick={live.stop}
+                    >
+                        {t('live.stop')}
+                    </button>
+                    <button
+                        className="neon-button neon-button-primary"
+                        disabled={!valid || task.pending || live.active || live.pending}
+                        onClick={() => {
+                            live.reset();
                             void task.run(() =>
                                 call('neon_realtime_snapshot', {
                                     query,
                                     ...(until ? {column, until} : {}),
                                 }),
-                            )
-                        }
+                            );
+                        }}
                     >
                         {t(until ? 'waitSnapshot' : 'readSnapshot')}
                     </button>
                     <span className="neon-hint">{t('snapshotTimeout')}</span>
                 </div>
+                {live.result && (
+                    <p role="status" className="neon-hint">
+                        {t(`live.${live.result.status}`)}
+                        {live.result.updatedAt &&
+                            ` · ${new Date(live.result.updatedAt).toLocaleTimeString()}`}
+                    </p>
+                )}
+                {live.error && (
+                    <p role="alert" className="neon-error">
+                        {live.error}
+                    </p>
+                )}
             </PanelSection>
             <PanelSection
                 title={t('snapshot')}
                 actions={
-                    task.data ? (
-                        <span className="neon-count">
-                            {t('recordCount', {count: task.data.length})}
-                        </span>
+                    data ? (
+                        <span className="neon-count">{t('recordCount', {count: data.length})}</span>
                     ) : undefined
                 }
             >
                 <Feedback {...task} waiting />
-                {task.data ? (
+                {data ? (
                     <>
-                        <DataTable data={objectRows(task.data)} />
-                        <p className="neon-result-count">{t('snapshotComplete')}</p>
+                        <DataTable data={objectRows(data)} />
+                        {!live.result && (
+                            <p className="neon-result-count">{t('snapshotComplete')}</p>
+                        )}
                     </>
                 ) : (
                     !task.pending && <ResultPlaceholder>{t('realtimeEmpty')}</ResultPlaceholder>

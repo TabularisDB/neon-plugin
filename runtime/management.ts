@@ -3,8 +3,10 @@ import {compileFunction} from './functionCompiler.js';
 import {deploymentVerificationState, verificationInputError} from './functionVerification.js';
 import {strToU8, zipSync} from 'fflate';
 import type {Params} from './database.js';
+import {authManagementMethods, manageAuth, AuthManagementError} from './authManagement.js';
 
 export const managementMethods = new Set([
+    ...authManagementMethods,
     'account_functions_list',
     'account_function_get',
     'account_function_deploy',
@@ -160,9 +162,21 @@ export async function manage(
     args: Params,
     scope: Scope,
     fetcher: typeof fetch,
+    owner = '',
 ): Promise<unknown> {
     if (!managementMethods.has(method))
         throw new ManagementError('Unsupported Neon management method');
+    if (authManagementMethods.has(method)) {
+        try {
+            return await manageAuth(client, method, args, scope, owner, fetcher);
+        } catch (error) {
+            throw new ManagementError(
+                error instanceof AuthManagementError
+                    ? error.message
+                    : 'Neon Auth management is unavailable',
+            );
+        }
+    }
     if (method === 'account_functions_list') {
         const values = await client.functions.list({...scope, limit: 100}).all();
         return {functions: values.map(item)};

@@ -1,10 +1,10 @@
 {
   "repository": "https://github.com/TabularisDB/tabularis",
-  "branch": "NewtTheWolf:feat/neon-integration",
+  "branch": "v0.33.0",
   "requiredHostApi": "0.4.1",
-  "status": "Sandboxed cloud provider integration; Core API 0.4.1 required. Live tabularis web and Function code/environment updates verified; runtime activation can lag accepted metadata by roughly two minutes.",
+  "status": "Released Tabularis 0.33.0 with host API 0.4.1. Neon 0.4 file transfers, live queries and Auth administration use the existing provider bridge.",
   "pullRequest": "https://github.com/TabularisDB/tabularis/pull/1445",
-  "requiredCoreCommit": "e5859d2ec467bba78bb02cd92b5f94243be234d2",
+  "requiredCoreCommit": "a4b2b981909b756dc337f2b6cbccf6207b05fb4f",
   "extractedFrom": {
     "commit": "238f997af7f7a734b40ad871fa1c9c40aa679f11",
     "path": "plugins/neon"
