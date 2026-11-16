@@ -166,7 +166,12 @@ function AuthUserList({connectionId}: {connectionId: string}) {
                             onChange={(event) => setSearchDraft(event.target.value)}
                         />
                     </label>
-                    <button type="submit" onClick={submitPluginForm} className="neon-button" disabled={read.pending}>
+                    <button
+                        type="submit"
+                        onClick={submitPluginForm}
+                        className="neon-button"
+                        disabled={read.pending}
+                    >
                         {t('authManager.searchAction')}
                     </button>
                 </form>
