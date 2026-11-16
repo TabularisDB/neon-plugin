@@ -37,6 +37,22 @@ interface LoginJob {
     expires: number;
 }
 let job: LoginJob | undefined;
+const supervisedLogins = new WeakSet<ChildProcessWithoutNullStreams>();
+// Windows forcibly terminates Node without running its exit hooks. The open parent
+// pipe lets this tiny owner stop its CLI child even when only the plugin is killed.
+const windowsLoginOwner = `
+const {spawn} = require('node:child_process');
+const child = spawn(process.argv[1], process.argv.slice(2), {
+    shell: false, windowsHide: true, stdio: ['ignore', 'inherit', 'inherit'],
+});
+const stop = () => child.kill('SIGKILL');
+process.stdin.resume();
+process.stdin.once('end', stop);
+process.stdin.once('error', stop);
+process.once('exit', stop);
+child.once('error', () => process.exit(1));
+child.once('close', (code) => process.exit(code ?? 1));
+`;
 
 function profileName(value: unknown = 'DEFAULT'): string {
     if (typeof value !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value))
@@ -81,10 +97,23 @@ function launch(args: string[]): ChildProcessWithoutNullStreams {
     // Only an explicit login action may run interactive auth; probes and refresh stay noninteractive.
     if (args[0] === 'login') env.CI = 'false';
     const options = {shell: false, windowsHide: true, env, stdio: 'pipe' as const};
+    const execute = (file: string, leadingArgs: string[] = []) => {
+        const cliArgs = [...leadingArgs, ...args, '--no-analytics'];
+        if (process.platform === 'win32' && args[0] === 'login') {
+            const child = spawn(
+                process.execPath,
+                ['--input-type=commonjs', '-e', windowsLoginOwner, '--', file, ...cliArgs],
+                options,
+            );
+            supervisedLogins.add(child);
+            return child;
+        }
+        return spawn(file, cliArgs, options);
+    };
     if (process.platform === 'win32') {
         for (const directory of (process.env.PATH ?? '').split(delimiter).filter(Boolean)) {
             const binary = join(directory, 'neon.exe');
-            if (existsSync(binary)) return spawn(binary, [...args, '--no-analytics'], options);
+            if (existsSync(binary)) return execute(binary);
             // npm's .cmd shim needs a shell. Invoke the package's advertised CLI entry with Node instead.
             if (!existsSync(join(directory, 'neon.cmd'))) continue;
             const packageDirectory = join(directory, 'node_modules', 'neon');
@@ -96,17 +125,19 @@ function launch(args: string[]): ChildProcessWithoutNullStreams {
                 const pkg = metadata as {name?: string; bin?: {neon?: string}};
                 const entry = join(packageDirectory, 'dist', 'cli.js');
                 if (pkg.name === 'neon' && pkg.bin?.neon === 'dist/cli.js' && existsSync(entry))
-                    return spawn(process.execPath, [entry, ...args, '--no-analytics'], options);
+                    return execute(process.execPath, [entry]);
             } catch {
                 /* A different installation may be available later in PATH. */
             }
         }
+        return execute('neon.exe');
     }
-    return spawn('neon', [...args, '--no-analytics'], options);
+    return execute('neon');
 }
 
 function kill(child: ChildProcessWithoutNullStreams): void {
-    child.kill('SIGTERM');
+    if (supervisedLogins.has(child)) child.stdin.end();
+    else child.kill('SIGTERM');
     const timer = setTimeout(() => {
         if (child.exitCode === null) child.kill('SIGKILL');
     }, 1000);
@@ -358,7 +389,7 @@ async function startLogin(): Promise<LoginResult> {
     if (job && job.result.status === 'waiting') return {...job.result};
     const profile = `tabularis-${randomUUID()}`;
     const child = launch(['login', '--profile', profile]);
-    child.stdin.end();
+    if (!supervisedLogins.has(child)) child.stdin.end();
     const current: LoginJob = {
         result: {id: randomUUID(), status: 'waiting', browserOpened: process.platform !== 'linux'},
         child,
@@ -447,13 +478,12 @@ export async function cliSetup(method: string, args: Params): Promise<unknown> {
 
 process.stdin.once('end', () => stopJob('Neon CLI sign-in was cancelled.'));
 process.once('exit', () => {
-    job?.child.kill('SIGKILL');
+    if (job && !supervisedLogins.has(job.child)) job.child.kill('SIGKILL');
 });
 for (const [signal, exitCode] of [
     ['SIGTERM', 143],
     ['SIGINT', 130],
 ] as const)
     process.once(signal, () => {
-        job?.child.kill('SIGKILL');
         process.exit(exitCode);
     });
