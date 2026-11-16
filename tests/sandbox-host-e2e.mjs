@@ -199,6 +199,23 @@ try {
     );
     assert(stableCount < 12, `Unexpected account RPC volume: ${stableCount}`);
     check('guest hooks settle without repeated account RPCs');
+    let linked=0;
+    await context.route('**/api/v1/rpc/**',async(route)=>{
+        const request=route.request().postDataJSON();
+        if(JSON.stringify(request).includes('offline-form-test-key')) {
+            linked++;
+            await route.fulfill({status:403,contentType:'application/json',body:JSON.stringify({ok:false,error:{code:'FORBIDDEN',message:'Offline submit reached the host'}})});
+        } else await route.continue();
+    });
+    await key.fill('offline-form-test-key');
+    await sandbox.getByRole('button',{name:'Connect account',exact:true}).click();
+    for(let attempt=0;attempt<40&&!linked;attempt++)await pause(50);
+    assert(linked,'The API-key form did not submit through the allow-scripts-only sandbox');
+    await key.fill('offline-form-test-key');
+    await key.press('Enter');
+    for(let attempt=0;attempt<40&&linked<2;attempt++)await pause(50);
+    assert.equal(linked,2,'Keyboard submission must reach the same handler exactly once');
+    check('real API-key form submits through the sandbox; synthetic key intercepted before storage/network');
     await page.screenshot({path: join(artifacts, 'sandbox-host-e2e.png'), fullPage: true});
     assert.deepEqual(evidence.pageErrors, []);
     let attempts = '';

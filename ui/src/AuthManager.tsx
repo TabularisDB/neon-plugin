@@ -11,6 +11,7 @@ import {useTask} from './hooks/useTask';
 import {PanelSection} from './components/PanelSection';
 import type {AuthUserDetails, AuthUsersPage} from './types/authManagement';
 import {AuthControl} from './components/AuthControl';
+import {submitPluginForm} from './utils/form';
 
 const authStyles = `
 .neon-auth {min-width:0;max-width:1100px;margin:0 auto}
@@ -165,7 +166,7 @@ function AuthUserList({connectionId}: {connectionId: string}) {
                             onChange={(event) => setSearchDraft(event.target.value)}
                         />
                     </label>
-                    <button type="submit" className="neon-button" disabled={read.pending}>
+                    <button type="submit" onClick={submitPluginForm} className="neon-button" disabled={read.pending}>
                         {t('authManager.searchAction')}
                     </button>
                 </form>
@@ -303,6 +304,7 @@ function CreateUser({connectionId, onCreated}: {connectionId: string; onCreated:
                 <div className="neon-row">
                     <button
                         type="submit"
+                        onClick={submitPluginForm}
                         className="neon-button neon-button-primary"
                         disabled={pending || !management.scope || !name.trim() || !email.trim()}
                     >

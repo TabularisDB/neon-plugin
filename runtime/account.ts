@@ -230,7 +230,7 @@ export async function account(
             if (buckets.warning) warnings.push(buckets.warning);
             if (buckets.value && !buckets.value.some((item) => item.name === 'assets'))
                 warnings.push(
-                    'The Storage view currently browses the assets bucket, which is absent on this branch.',
+                    'This branch has no default assets bucket; select an existing bucket in Storage.',
                 );
         }
         if (discovered.ai.value?.enabled)
@@ -240,10 +240,6 @@ export async function account(
                 bundle[`NEON_FUNCTION_${item.slug.toUpperCase().replaceAll('-', '_')}_BASE_URL`] =
                     item.invocation_url;
         }
-        if (discovered.functions.value?.length && !bundle.NEON_FUNCTION_HELLO_BASE_URL)
-            warnings.push(
-                'Functions were discovered; the current invocation view requires a deployed hello function.',
-            );
         if (
             discovered.realtime.value?.enabled &&
             !discovered.realtime.value.pending &&

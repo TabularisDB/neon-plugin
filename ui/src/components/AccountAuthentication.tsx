@@ -1,6 +1,7 @@
 import {useId, useState} from 'react';
 import {PluginSelect, copyText, openUrl, usePluginTranslation} from '@tabularis/plugin-api';
 import {useCliAuthentication} from '../hooks/useCliAuthentication';
+import {submitPluginForm} from '../utils/form';
 
 export function AccountAuthentication({
     onCliConnected,
@@ -249,6 +250,7 @@ export function AccountAuthentication({
                     <div className="neon-row">
                         <button
                             type="submit"
+                            onClick={submitPluginForm}
                             className="neon-button neon-button-primary"
                             disabled={busy || !draft.trim()}
                         >

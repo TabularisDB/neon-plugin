@@ -108,6 +108,7 @@ export async function service(
         case 'neon_storage_put':
         case 'neon_storage_get':
         case 'neon_storage_delete': {
+            const Bucket = storageBucket(args.bucket);
             const s3 = new S3Client({
                 endpoint: env('AWS_ENDPOINT_URL_S3'),
                 region: env('AWS_REGION'),
@@ -117,7 +118,6 @@ export async function service(
                     secretAccessKey: env('AWS_SECRET_ACCESS_KEY'),
                 },
             });
-            const Bucket = storageBucket(args.bucket);
             try {
                 if (method === 'neon_storage_buckets') {
                     const result = await s3.send(new ListBucketsCommand({}), {

@@ -11,7 +11,8 @@ vi.mock('../../src/components/DataTable', () => ({
         createElement('pre', null, JSON.stringify(data.rows)),
 }));
 vi.mock('@tabularis/plugin-api', () => ({
-    usePluginTranslation: () => (key: string) => key,
+    usePluginTranslation: () => (key: string, values?: Record<string, string | number>) =>
+        key === 'deleteObjectConfirm' ? `Delete ${values?.key} from ${values?.bucket}` : key,
     usePluginRpc: () => rpc,
     usePluginWorkspace: () => ({openWorkspace: vi.fn()}),
     PluginWorkspaceShell: ({children}: {children: ReactNode}) => children,
@@ -21,6 +22,23 @@ afterEach(cleanup);
 beforeEach(() => rpc.call.mockReset());
 
 describe('Storage pages', () => {
+    it('confirms and deletes from the selected bucket rather than the default bucket', async () => {
+        rpc.call.mockImplementation(async (method) =>
+            method === 'neon_storage_list' ? {objects: [], nextContinuationToken: null} : null,
+        );
+        render(createElement(NeonPanel, {connectionId: 'saved', serviceId: 'storage'}));
+        fireEvent.change(screen.getByLabelText('files.bucket'), {target: {value: 'media'}});
+        fireEvent.change(screen.getByLabelText('objectKey'), {target: {value: 'document.bin'}});
+        fireEvent.click(screen.getByRole('button', {name: 'deleteObject'}));
+        await screen.findByText('Delete document.bin from media');
+        fireEvent.click(screen.getByRole('button', {name: 'confirm'}));
+        await waitFor(() =>
+            expect(rpc.call).toHaveBeenCalledWith('neon_storage_delete', {
+                bucket: 'media',
+                key: 'document.bin',
+            }),
+        );
+    });
     it('disables reads for listed oversized objects and enables reads for small objects', async () => {
         rpc.call.mockResolvedValue({
             objects: [

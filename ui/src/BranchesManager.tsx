@@ -9,6 +9,7 @@ import {useBranches} from './hooks/useBranches';
 import {useTask} from './hooks/useTask';
 import {PanelSection} from './components/PanelSection';
 import {branchDeletionBlocked} from './utils/branches';
+import {submitPluginForm} from './utils/form';
 
 interface Resources {
     databases: {name: string}[];
@@ -224,6 +225,7 @@ export function BranchesManager({connectionId}: {connectionId: string}) {
                             <div className="neon-row">
                                 <button
                                     type="submit"
+                                    onClick={submitPluginForm}
                                     className="neon-button neon-button-primary"
                                     disabled={pending || !newName.trim()}
                                 >
@@ -357,6 +359,7 @@ export function BranchesManager({connectionId}: {connectionId: string}) {
                                     />
                                     <button
                                         type="submit"
+                                        onClick={submitPluginForm}
                                         className="neon-button"
                                         disabled={
                                             pending ||

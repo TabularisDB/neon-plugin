@@ -634,6 +634,7 @@ function Storage({connectionId}: ConnectedProps) {
                             <p>
                                 {t(confirmDelete ? 'deleteObjectConfirm' : 'putObjectConfirm', {
                                     key,
+                                    bucket,
                                 })}
                             </p>
                             <div className="neon-inline-actions">

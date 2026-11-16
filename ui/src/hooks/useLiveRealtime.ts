@@ -72,6 +72,7 @@ export function useLiveRealtime(connectionId: string) {
             disposed = false;
         let timer: ReturnType<typeof setTimeout>;
         const poll = async () => {
+            if (disposed || generation !== epoch.current || active.current !== id) return;
             try {
                 const response = await call<Partial<Snapshot>>('neon_realtime_poll', {
                     id,

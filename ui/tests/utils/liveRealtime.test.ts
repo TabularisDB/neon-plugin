@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import {createElement} from 'react';
-import {act, cleanup, fireEvent, render, screen, waitFor} from '@testing-library/react';
+import {act, cleanup, fireEvent, render, screen} from '@testing-library/react';
 import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import {useLiveRealtime} from '../../src/hooks/useLiveRealtime';
 const rpc = vi.hoisted(() => ({call: vi.fn()}));
@@ -22,6 +22,7 @@ afterEach(() => {
     vi.useRealTimers();
 });
 it('keeps updating one subscription and stops it on user action', async () => {
+    vi.useFakeTimers();
     let revision = 1;
     rpc.call.mockImplementation(async (method) =>
         method === 'neon_realtime_start'
@@ -31,18 +32,11 @@ it('keeps updating one subscription and stops it on user action', async () => {
               : null,
     );
     render(createElement(Harness));
-    fireEvent.click(screen.getByText('Start'));
-    await waitFor(() => expect(screen.getByText(/"value":1/)).toBeTruthy());
-    vi.useFakeTimers();
     await act(async () => {
-        await vi.advanceTimersByTimeAsync(1100);
+        fireEvent.click(screen.getByText('Start'));
+        await vi.advanceTimersByTimeAsync(0);
     });
-    // The initial timer was installed before fake timers; restart to install the controlled timer.
-    fireEvent.click(screen.getByText('Stop'));
-    fireEvent.click(screen.getByText('Start'));
-    await act(async () => {
-        await Promise.resolve();
-    });
+    expect(screen.getByText(/"value":1/)).toBeTruthy();
     await act(async () => {
         await vi.advanceTimersByTimeAsync(1100);
     });
