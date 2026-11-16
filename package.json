@@ -30,6 +30,7 @@
     "build:runtime": "tsc -p tsconfig.json",
     "build:ui": "pnpm --dir ui build",
     "package": "pnpm build && node scripts/package.mjs",
+    "test:package": "node tests/package-smoke.mjs",
     "test:sandbox": "node tests/sandbox-host-e2e.mjs"
   },
   "repository": {

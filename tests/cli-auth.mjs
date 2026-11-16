@@ -1,6 +1,6 @@
 import {test, after} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp, writeFile, readFile, rm} from 'node:fs/promises';
+import {mkdtemp, mkdir, writeFile, readFile, rm, copyFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {spawn} from 'node:child_process';
@@ -9,10 +9,11 @@ import {cliSetup, cliCredential} from '../dist/cliAuth.js';
 import {extension} from '../dist/scope.js';
 import {account} from '../dist/account.js';
 
-const directory = await mkdtemp(join(tmpdir(), 'neon-cli-bridge-'));
+const directory = await mkdtemp(join(tmpdir(), 'neon CLI & bridge-'));
 const executable = join(directory, 'neon');
 const credentialPath = join(directory, 'credentials.json');
 const log = join(directory, 'calls.jsonl');
+const continueAuthorization = join(directory, 'continue-auth');
 const originalEnv = {...process.env};
 const expires = () => Date.now() + 3600000;
 const credential = () => ({
@@ -28,7 +29,7 @@ const row = () => ({
     credentials: credentialPath,
 });
 const fixture = `#!${process.execPath}
-import { readFileSync, writeFileSync, appendFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, appendFileSync, existsSync } from 'node:fs';
 const args = process.argv.slice(2);
 appendFileSync(process.env.FIXTURE_LOG, JSON.stringify({args,pid:process.pid,ci:process.env.CI,key: process.env.NEON_API_KEY,profile:process.env.NEON_PROFILE,config:process.env.NEON_CONFIG_DIR,browser:process.env.BROWSER,desktop:process.env.XDG_CURRENT_DESKTOP})+'\\n');
 if (args[0] === '--version') { console.log(process.env.FIXTURE_VERSION || '8.15.1'); process.exit(); }
@@ -45,7 +46,11 @@ if (args[0] === 'login') {
  if (process.env.CI !== 'false') { console.error('Cannot run interactive auth in CI'); process.exit(1); }
  if (process.env.FIXTURE_MODE === 'partial-url') {
   process.stderr.write('Auth Url: https://oauth2.neon.tech/oauth2/auth?state=');
-  setTimeout(()=>process.stderr.write('complete&client_id=official-cli\\n'), 200);
+  const timer = setInterval(() => {
+   if (existsSync(process.env.FIXTURE_CONTINUE_AUTH)) {
+    clearInterval(timer); process.stderr.write('complete&client_id=official-cli\\n');
+   }
+  }, 10);
  } else console.error('Auth Url: '+(process.env.FIXTURE_URL || 'https://oauth2.neon.tech/oauth2/auth?state=opaque&client_id=official-cli'));
  if (process.env.FIXTURE_MODE === 'login-fail') { console.error('private-token'); process.exit(1); }
  if (process.env.FIXTURE_MODE === 'login-complete') { process.exit(); }
@@ -55,6 +60,15 @@ if (args[0] === 'login') {
 await writeFile(executable, fixture, {mode: 0o700});
 // An executable without an extension must be ESM independently of the host's working directory.
 await writeFile(join(directory, 'package.json'), '{"type":"module"}');
+// Match npm's Windows layout; launch must resolve the JS entry without a shell.
+const packageDirectory = join(directory, 'node_modules', 'neon');
+await mkdir(join(packageDirectory, 'dist'), {recursive: true});
+await writeFile(
+    join(packageDirectory, 'package.json'),
+    JSON.stringify({name: 'neon', type: 'module', bin: {neon: 'dist/cli.js'}}),
+);
+await writeFile(join(packageDirectory, 'dist', 'cli.js'), fixture);
+await writeFile(join(directory, 'neon.cmd'), '@echo SHIM_MUST_NOT_RUN & exit /b 99\r\n');
 
 async function reset(mode = '') {
     for (const key of Object.keys(process.env)) if (!(key in originalEnv)) delete process.env[key];
@@ -65,11 +79,13 @@ async function reset(mode = '') {
         NEON_CONFIG_DIR: directory,
         FIXTURE_LOG: log,
         FIXTURE_CREDENTIAL: credentialPath,
+        FIXTURE_CONTINUE_AUTH: continueAuthorization,
         FIXTURE_PROFILES: JSON.stringify([row()]),
         FIXTURE_MODE: mode,
     });
     await writeFile(credentialPath, JSON.stringify(credential()));
     await writeFile(log, '');
+    await rm(continueAuthorization, {force: true});
 }
 async function calls() {
     return (await readFile(log, 'utf8'))
@@ -79,12 +95,22 @@ async function calls() {
         .map((line) => JSON.parse(line));
 }
 async function settled(id) {
-    for (let i = 0; i < 100; i++) {
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
         const result = await cliSetup('account_cli_login_poll', {id});
         if (result.authUrl || result.status !== 'waiting') return result;
         await new Promise((resolve) => setTimeout(resolve, 10));
     }
     throw new Error('Fixture did not start');
+}
+async function called(method) {
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
+        const call = (await calls()).find((entry) => entry.args[0] === method);
+        if (call) return call;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    throw new Error(`Fixture ${method} did not start`);
 }
 after(async () => {
     Object.assign(process.env, originalEnv);
@@ -103,6 +129,51 @@ test('missing CLI is safe and does not try install or login', async () => {
         reasonCode: 'missing',
         reason: 'Install the official Neon CLI to sign in through your browser.',
     });
+});
+test('Windows npm CLI entries resolve without executing their shell shim', async () => {
+    await reset();
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+    try {
+        Object.defineProperty(process, 'platform', {value: 'win32'});
+        assert.equal((await cliSetup('account_cli_status', {})).canReuse, true);
+        assert((await calls()).every((call) => call.key === undefined));
+    } finally {
+        Object.defineProperty(process, 'platform', platform);
+    }
+});
+test('Windows native executables take precedence and fail closed if they are not Neon', async () => {
+    await reset();
+    const binary = join(directory, 'neon.exe');
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+    await copyFile(process.execPath, binary);
+    try {
+        Object.defineProperty(process, 'platform', {value: 'win32'});
+        // This real executable rejects Neon's flags; the valid npm fixture must not mask it.
+        const status = await cliSetup('account_cli_status', {});
+        assert.equal(status.installed, true);
+        assert.equal(status.version, null);
+        assert.equal(status.canReuse, false);
+        assert.equal(status.reasonCode, 'unavailable');
+        assert.deepEqual(await calls(), []);
+    } finally {
+        Object.defineProperty(process, 'platform', platform);
+        await rm(binary, {force: true});
+    }
+});
+test('Windows npm shims with unexpected package metadata never execute their entry', async () => {
+    await reset();
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform');
+    const manifest = join(packageDirectory, 'package.json');
+    const original = await readFile(manifest, 'utf8');
+    try {
+        Object.defineProperty(process, 'platform', {value: 'win32'});
+        await writeFile(manifest, JSON.stringify({name: 'neon', bin: {neon: '../../evil.js'}}));
+        assert.equal((await cliSetup('account_cli_status', {})).installed, false);
+        assert.deepEqual(await calls(), []);
+    } finally {
+        Object.defineProperty(process, 'platform', platform);
+        await writeFile(manifest, original);
+    }
 });
 test('unverified CLI versions fail closed before profile or auth commands', async () => {
     await reset();
@@ -334,55 +405,53 @@ test('login jobs expire without returning raw output', async (t) => {
 test('a partial authorization URL is withheld until its complete line arrives', async () => {
     await reset('partial-url');
     const started = await cliSetup('account_cli_login_start', {});
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await called('login');
+    await new Promise((resolve) => setTimeout(resolve, 20));
     assert.equal((await cliSetup('account_cli_login_poll', {id: started.id})).authUrl, undefined);
-    await new Promise((resolve) => setTimeout(resolve, 200));
-    assert.match(
-        (await cliSetup('account_cli_login_poll', {id: started.id})).authUrl,
-        /state=complete/,
-    );
+    await writeFile(continueAuthorization, 'continue');
+    assert.match((await settled(started.id)).authUrl, /state=complete/);
     await cliSetup('account_cli_login_cancel', {id: started.id});
 });
 test('host stdin end and termination signals kill only its owned login child', async () => {
-    for (const signal of ['stdin-end', 'SIGTERM', 'SIGINT']) {
-        await reset();
-        const host = spawn(
-            process.execPath,
-            [
-                '--input-type=module',
-                '-e',
-                `import {cliSetup} from ${JSON.stringify(new URL('../dist/cliAuth.js', import.meta.url).href)}; process.stdin.resume(); await cliSetup('account_cli_login_start', {});`,
-            ],
-            {env: process.env, stdio: 'pipe'},
-        );
-        let pid;
-        for (let i = 0; i < 100; i++) {
-            pid = (await calls()).find((call) => call.args[0] === 'login')?.pid;
-            if (pid) break;
-            await new Promise((resolve) => setTimeout(resolve, 10));
-        }
-        assert(pid, 'owned fixture login started');
-        const exited = once(host, 'exit');
-        if (signal === 'stdin-end') host.stdin.end();
-        else host.kill(signal);
-        await exited;
-        let running = true;
-        for (let i = 0; i < 100; i++) {
-            try {
-                process.kill(pid, 0);
-                if (
-                    process.platform === 'linux' &&
-                    /\) Z /.test(await readFile(`/proc/${pid}/stat`, 'utf8'))
-                ) {
+    const modes = process.platform === 'win32' ? ['native'] : ['native', 'windows-shim'];
+    for (const mode of modes) {
+        const signals = ['stdin-end', 'SIGTERM', 'SIGINT'];
+        if (mode === 'windows-shim' || process.platform === 'win32') signals.push('SIGKILL');
+        for (const signal of signals) {
+            await reset();
+            const host = spawn(
+                process.execPath,
+                [
+                    '--input-type=module',
+                    '-e',
+                    `import {cliSetup} from ${JSON.stringify(new URL('../dist/cliAuth.js', import.meta.url).href)}; ${mode === 'windows-shim' ? "Object.defineProperty(process, 'platform', {value: 'win32'});" : ''} process.stdin.resume(); await cliSetup('account_cli_login_start', {});`,
+                ],
+                {env: process.env, stdio: 'pipe'},
+            );
+            const pid = (await called('login')).pid;
+            assert(pid, 'owned fixture login started');
+            const exited = once(host, 'exit');
+            if (signal === 'stdin-end') host.stdin.end();
+            else host.kill(signal);
+            await exited;
+            let running = true;
+            for (let i = 0; i < 500; i++) {
+                try {
+                    process.kill(pid, 0);
+                    if (
+                        process.platform === 'linux' &&
+                        /\) Z /.test(await readFile(`/proc/${pid}/stat`, 'utf8'))
+                    ) {
+                        running = false;
+                        break;
+                    }
+                } catch {
                     running = false;
                     break;
                 }
-            } catch {
-                running = false;
-                break;
+                await new Promise((resolve) => setTimeout(resolve, 10));
             }
-            await new Promise((resolve) => setTimeout(resolve, 10));
+            assert.equal(running, false, `${mode} ${signal} did not leave a running login process`);
         }
-        assert.equal(running, false, `${signal} did not leave a running login process`);
     }
 });

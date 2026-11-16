@@ -21,9 +21,13 @@ Core build accepts `kind: cloud`; older hosts reject that package kind.
 
 ## Installation
 
-The published archive currently targets **Linux x64** and requires **Node.js 22+**
-on the Tabularis host. It includes its runtime dependencies; Node itself is not
-bundled. Other platforms have not been packaged or verified in this release.
+Native packages target **Windows, macOS and Linux**, each on **x64 and ARM64**.
+Use **Node.js 22+** with the same architecture as Tabularis and install the matching
+ZIP (for example, x64 Node for an x64 Tabularis build on ARM hardware).
+Runtime dependencies are included; Node itself is not bundled.
+Each package contains its own native Function compiler, so ZIPs cannot be reused
+across targets. Published targets pass native runtime tests and an extracted-package
+smoke test in CI before release.
 
 Download the ZIP and standalone `.tabularium` from
 [GitHub Releases](https://github.com/TabularisDB/neon-plugin/releases).
@@ -96,6 +100,7 @@ pnpm build
 pnpm test
 pnpm --dir ui typecheck
 pnpm package
+pnpm test:package
 ```
 
 The offline sandbox smoke uses the real packaged UI, a built Core server and an
@@ -119,6 +124,13 @@ Packaging creates a fresh archive with runtime code, dependencies, UI bundles,
 locales, manifest, documentation, icon and license. It excludes `.env`, `.neon`,
 test captures and the source checkout. Version tags must match `.tabularium`.
 Publish `.tabularium` as a standalone release asset as well as inside the ZIP.
+
+`pnpm package` builds for the machine running it. `pnpm test:package` extracts the
+ZIP into an isolated directory and checks the real driver and JavaScript/TypeScript
+Function compiler without accessing Neon. CI repeats this on all six native targets.
+After merging, push a `v<version>` tag matching `.tabularium` to publish a plugin
+release with all six tested ZIPs, `default.tabularium` and `SHA256SUMS`. This workflow
+does not create a Tabularis Core release.
 
 ## License and support
 
